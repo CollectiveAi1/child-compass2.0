@@ -1,24 +1,36 @@
 import { useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { io } from 'socket.io-client';
+import { create } from 'zustand';
 import type { ActivityType, AttendanceStatus } from '@compass/shared';
-import { api, getDashboard } from '../lib/api';
+import { API_BASE, api, getDashboard } from '../lib/api';
 import { useSession } from '../lib/session';
+
+const POLL_INTERVAL = 15_000;
+
+const useLiveSyncState = create<{ connected: boolean; setConnected: (connected: boolean) => void }>(set => ({ connected: false, setConnected: connected => set({ connected }) }));
 
 export function useDashboard() {
   const token = useSession(state => state.token)!;
-  return useQuery({ queryKey: ['dashboard'], queryFn: () => getDashboard(token), staleTime: 20_000 });
+  const live = useLiveSyncState(state => state.connected);
+  // WebSocket sync pushes invalidations instantly; without it (Vercel serverless,
+  // flaky mobile networks) the dashboard falls back to polling.
+  return useQuery({ queryKey: ['dashboard'], queryFn: () => getDashboard(token), staleTime: 10_000, refetchInterval: live ? false : POLL_INTERVAL });
 }
 
 export function useLiveSync() {
   const client = useQueryClient();
   const token = useSession(state => state.token);
+  const setConnected = useLiveSyncState(state => state.setConnected);
   useEffect(() => {
-    const socket = io({ transports: ['websocket', 'polling'], auth: { token } });
+    const socket = io(API_BASE || undefined, { transports: ['websocket', 'polling'], auth: { token }, reconnectionAttempts: 3 });
     const refresh = () => void client.invalidateQueries({ queryKey: ['dashboard'] });
     ['attendance:updated', 'activity:created', 'activity:updated', 'message:created', 'invoice:updated'].forEach(event => socket.on(event, refresh));
-    return () => { socket.disconnect(); };
-  }, [client, token]);
+    socket.on('connect', () => { setConnected(true); refresh(); });
+    socket.on('disconnect', () => setConnected(false));
+    socket.on('connect_error', () => setConnected(false));
+    return () => { setConnected(false); socket.disconnect(); };
+  }, [client, token, setConnected]);
 }
 
 function useCompassMutation<TVariables>(path: (value: TVariables) => string, method: string, body: (value: TVariables) => unknown) {

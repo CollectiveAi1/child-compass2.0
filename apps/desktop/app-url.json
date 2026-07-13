@@ -1,0 +1,4 @@
+{
+  "url": "http://localhost:5173",
+  "note": "Set url to your deployed app (e.g. https://your-app.vercel.app) before packaging with `npm run dist`. COMPASS_APP_URL overrides this at runtime."
+}

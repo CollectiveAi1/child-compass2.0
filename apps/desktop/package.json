@@ -1,0 +1,25 @@
+{
+  "name": "compass-desktop",
+  "productName": "Child Care Compass",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Desktop shell for Child Care Compass.",
+  "main": "main.cjs",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder"
+  },
+  "devDependencies": {
+    "electron": "^33.2.1",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "demo.compass.childcare",
+    "productName": "Child Care Compass",
+    "files": ["main.cjs", "app-url.json", "icon.png"],
+    "directories": { "output": "release" },
+    "mac": { "category": "public.app-category.education" },
+    "win": { "target": "nsis" },
+    "linux": { "target": "AppImage", "category": "Education" }
+  }
+}

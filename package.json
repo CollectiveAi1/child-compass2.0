@@ -3,13 +3,17 @@
   "private": true,
   "version": "1.0.0",
   "workspaces": [
-    "apps/*",
+    "apps/api",
+    "apps/web",
     "packages/*"
   ],
   "scripts": {
     "dev": "concurrently -n API,WEB -c magenta,cyan \"npm run dev -w @compass/api\" \"npm run dev -w @compass/web\"",
     "start": "npm run start -w @compass/api",
     "build": "npm run build -w @compass/shared && npm run build -w @compass/api && npm run build -w @compass/web",
+    "build:web": "npm run build -w @compass/web",
+    "icons": "node scripts/make-icons.mjs",
+    "desktop": "npm --prefix apps/desktop start",
     "test": "vitest run",
     "test:e2e": "node scripts/visual-qa.mjs",
     "test:watch": "vitest",

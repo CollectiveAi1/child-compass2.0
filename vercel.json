@@ -1,0 +1,13 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "installCommand": "npm install",
+  "buildCommand": "npm run build:web",
+  "outputDirectory": "apps/web/dist",
+  "functions": {
+    "api/index.ts": { "maxDuration": 10 }
+  },
+  "rewrites": [
+    { "source": "/api/:path*", "destination": "/api/index" },
+    { "source": "/((?!api/|assets/|icons/|sw\\.js|manifest\\.webmanifest|garden-moment\\.svg).*)", "destination": "/index.html" }
+  ]
+}
