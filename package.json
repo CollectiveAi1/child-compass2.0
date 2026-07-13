@@ -1,0 +1,30 @@
+{
+  "name": "child-care-compass",
+  "private": true,
+  "version": "1.0.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "concurrently -n API,WEB -c magenta,cyan \"npm run dev -w @compass/api\" \"npm run dev -w @compass/web\"",
+    "start": "npm run start -w @compass/api",
+    "build": "npm run build -w @compass/shared && npm run build -w @compass/api && npm run build -w @compass/web",
+    "test": "vitest run",
+    "test:e2e": "node scripts/visual-qa.mjs",
+    "test:watch": "vitest",
+    "typecheck": "npm run typecheck -w @compass/shared && npm run typecheck -w @compass/api && npm run typecheck -w @compass/web",
+    "lint": "eslint . --ext .ts,.tsx --max-warnings 0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.8.0",
+    "@sparticuz/chromium": "^138.0.2",
+    "@types/node": "^22.10.2",
+    "concurrently": "^9.1.0",
+    "eslint": "^9.8.0",
+    "playwright-core": "^1.61.1",
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.18.0",
+    "vitest": "^2.1.8"
+  }
+}
