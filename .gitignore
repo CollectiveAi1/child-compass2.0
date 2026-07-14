@@ -11,3 +11,4 @@ artifacts
 apps/web/ios
 apps/web/android
 apps/desktop/release
+/api/index.mjs

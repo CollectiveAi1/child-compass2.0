@@ -26,6 +26,7 @@
     "@sparticuz/chromium": "^138.0.2",
     "@types/node": "^22.10.2",
     "concurrently": "^9.1.0",
+    "esbuild": "^0.28.1",
     "eslint": "^9.8.0",
     "playwright-core": "^1.61.1",
     "typescript": "^5.7.2",
