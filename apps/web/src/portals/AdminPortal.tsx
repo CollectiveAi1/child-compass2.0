@@ -4,8 +4,10 @@ import { AlertTriangle, ArrowUpRight, BadgeDollarSign, CalendarDays, CheckCircle
 import type { Child } from '@compass/shared';
 import { childAge, formatMoney } from '@compass/shared';
 import { AppShell } from '../components/AppShell';
-import { Avatar, Button, IconButton, spring } from '../components/ui';
+import { Avatar, Button, ErrorScreen, IconButton, LoadingScreen, spring } from '../components/ui';
 import { useDashboard } from '../hooks/useCompass';
+import { firstName, todayLabel } from '../lib/format';
+import { useSession } from '../lib/session';
 
 const navigation = [
   { id: 'control', label: 'Control Center', icon: <LayoutDashboard size={19}/> },
@@ -20,18 +22,21 @@ function ChildRow({ child, selected, onSelect }: { child: Child; selected: boole
 }
 
 export function AdminPortal() {
-  const { data } = useDashboard();
+  const { data, isError, refetch } = useDashboard();
+  const user = useSession(state => state.user)!;
+  const clear = useSession(state => state.clear);
   const [active, setActive] = useState('control');
   const [selectedId, setSelectedId] = useState('child-1');
   const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'present' | 'expected'>('all');
   const selected = data?.children.find(child => child.id === selectedId) || data?.children[0];
-  const filtered = useMemo(() => data?.children.filter(child => `${child.firstName} ${child.lastName}`.toLowerCase().includes(search.toLowerCase())) || [], [data, search]);
-  if (!data) return null;
-  const occupancy = Math.round((data.stats.present / data.stats.capacity) * 100);
+  const filtered = useMemo(() => data?.children.filter(child => `${child.firstName} ${child.lastName}`.toLowerCase().includes(search.toLowerCase()) && (statusFilter === 'all' || child.attendanceStatus === statusFilter)) || [], [data, search, statusFilter]);
+  if (!data) return isError ? <ErrorScreen onRetry={() => void refetch()} onSignOut={clear}/> : <LoadingScreen/>;
+  const occupancy = Math.round((data.stats.present / Math.max(data.stats.capacity, 1)) * 100);
 
   return <AppShell navigation={navigation} active={active} onNavigate={setActive}>
     <main className="portal-page admin-page">
-      <div className="page-heading"><div><p className="eyebrow">Sunday, July 12</p><h1>{active === 'control' ? 'Good morning, Maya.' : navigation.find(item => item.id === active)?.label}</h1><p>{active === 'control' ? 'Your center is calm, covered, and ready for the day.' : 'Everything you need, gathered in one clear view.'}</p></div><Button className="button-primary"><Sparkles size={17}/> Create update</Button></div>
+      <div className="page-heading"><div><p className="eyebrow">{todayLabel()}</p><h1>{active === 'control' ? `Good morning, ${firstName(user.name)}.` : navigation.find(item => item.id === active)?.label}</h1><p>{active === 'control' ? 'Your center is calm, covered, and ready for the day.' : 'Everything you need, gathered in one clear view.'}</p></div><Button className="button-primary"><Sparkles size={17}/> Create update</Button></div>
 
       {active === 'control' ? <>
         <section className="admin-kpi-grid">
@@ -50,7 +55,7 @@ export function AdminPortal() {
       </> : null}
 
       {active === 'people' ? <section className="people-workspace">
-        <article className="panel people-list"><header><div><p className="eyebrow">Center roster</p><h2>Children</h2></div><span>{data.children.length} enrolled</span></header><label className="search-box"><Search size={17}/><input value={search} onChange={event => setSearch(event.target.value)} placeholder="Search children…"/></label><div className="filter-chips"><button className="active">All children</button><button>Present</button><button>Expected</button></div><div className="children-scroll">{filtered.map(child => <ChildRow key={child.id} child={child} selected={child.id === selected?.id} onSelect={() => setSelectedId(child.id)}/>)}</div></article>
+        <article className="panel people-list"><header><div><p className="eyebrow">Center roster</p><h2>Children</h2></div><span>{data.children.length} enrolled</span></header><label className="search-box"><Search size={17}/><input value={search} onChange={event => setSearch(event.target.value)} placeholder="Search children…"/></label><div className="filter-chips"><button className={statusFilter === 'all' ? 'active' : ''} onClick={() => setStatusFilter('all')}>All children</button><button className={statusFilter === 'present' ? 'active' : ''} onClick={() => setStatusFilter('present')}>Present</button><button className={statusFilter === 'expected' ? 'active' : ''} onClick={() => setStatusFilter('expected')}>Expected</button></div><div className="children-scroll">{filtered.map(child => <ChildRow key={child.id} child={child} selected={child.id === selected?.id} onSelect={() => setSelectedId(child.id)}/>)}</div></article>
         {selected ? <article className="panel child-context"><div className="context-hero"><Avatar label={`${selected.firstName} ${selected.lastName}`} tone={selected.avatar} size="lg"/><div><p className="eyebrow">Child profile</p><h2>{selected.firstName} {selected.lastName}</h2><p>{childAge(selected.birthday)} · {data.classrooms.find(room => room.id === selected.classroomId)?.name}</p></div><IconButton label="More options"><MoreHorizontal/></IconButton></div><div className="context-status"><span className={`status-chip status-${selected.attendanceStatus}`}>{selected.attendanceStatus.replace('_', ' ')}</span><small>{selected.checkedInAt ? `Arrived ${new Date(selected.checkedInAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}` : 'Not checked in'}</small></div><div className="detail-grid"><div><small>Birthday</small><b>{new Date(`${selected.birthday}T12:00:00`).toLocaleDateString([], { month: 'long', day: 'numeric', year: 'numeric' })}</b></div><div><small>Allergies</small><b>{selected.allergies.join(', ') || 'None noted'}</b></div><div className="full"><small>Care notes</small><p>{selected.notes}</p></div></div><h3>Today’s story</h3><div className="mini-activity-list">{data.activities.filter(activity => activity.childIds.includes(selected.id)).slice(0, 4).map(activity => <div key={activity.id}><span>{activity.type === 'meal' ? '🍓' : activity.type === 'nap' ? '☾' : activity.type === 'learning' ? '✎' : '✦'}</span><div><b>{activity.title}</b><small>{new Date(activity.createdAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</small><p>{activity.body}</p></div></div>)}</div></article> : null}
       </section> : null}
 

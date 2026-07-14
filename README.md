@@ -72,14 +72,16 @@ To package installers (dmg/nsis/AppImage), set your deployed URL in `apps/deskto
 
 ```bash
 npm run typecheck
+npm run lint
 npm test
 npm run build
+npm start & npm run test:e2e   # browser QA against the built app on :4000
 ```
 
 ## Architecture
 
 - `apps/web`: React 18, Vite, HashRouter, TanStack Query, Zustand, Framer Motion, Tailwind, Lucide. PWA manifest + service worker in `public/`, Capacitor config for native shells.
-- `apps/api`: Express, JWT RBAC, Zod, Socket.IO, and `pg-mem` PostgreSQL-compatible demo storage. Runs as a long-lived server locally (`npm start`) and as a Vercel serverless function in production (`api/index.ts`).
+- `apps/api`: Express, JWT RBAC, Zod, Socket.IO, and in-memory demo storage (`src/store.ts`). Runs as a long-lived server locally (`npm start`) and as a Vercel serverless function in production (`api/index.ts`).
 - `apps/desktop`: Electron shell that loads the web app (dev server or deployed URL).
 - `packages/shared`: shared entities, role routing, workflow contracts, and formatting helpers.
 

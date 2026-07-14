@@ -11,6 +11,16 @@ const attendanceSchema = z.object({ status: z.enum(['expected', 'present', 'went
 const activitySchema = z.object({ childIds: z.array(z.string()).min(1), type: z.enum(['moment', 'meal', 'nap', 'learning', 'note', 'incident']), title: z.string().min(1).max(80), body: z.string().min(1).max(600), value: z.string().max(80).optional(), mediaUrl: z.string().optional() });
 const messageSchema = z.object({ childId: z.string(), body: z.string().min(1).max(1000) });
 
+const uid = (prefix: string) => `${prefix}-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+
+// A child is "in someone's care" when the admin runs the center, the teacher
+// covers the child's classroom, or the parent is one of the child's guardians.
+function inCareOf(user: NonNullable<AuthRequest['user']>, child: { classroomId: string; guardianIds: string[] }): boolean {
+  if (user.role === 'admin') return true;
+  if (user.role === 'teacher') return user.classroomIds.includes(child.classroomId);
+  return child.guardianIds.includes(user.id);
+}
+
 function parseBody<T>(schema: z.ZodType<T>, body: unknown, res: express.Response): T | undefined {
   const parsed = schema.safeParse(body);
   if (!parsed.success) {
@@ -83,14 +93,17 @@ export function createApp(broadcast: Broadcast = () => undefined) {
     if (!body) return;
     const children = store().children.filter(child => body.childIds.includes(child.id) && child.centerId === req.user!.centerId);
     if (children.length !== body.childIds.length || (req.user!.role === 'teacher' && children.some(child => !req.user!.classroomIds.includes(child.classroomId)))) return res.status(403).json({ error: 'forbidden', message: 'One or more selected children are outside your classroom.' });
-    const activity: Activity = { id: `activity-${Date.now()}`, centerId: req.user!.centerId, classroomId: children[0]!.classroomId, childIds: body.childIds, authorId: req.user!.id, authorName: req.user!.name, type: body.type, title: body.title, body: body.body, value: body.value, mediaUrl: body.mediaUrl, createdAt: new Date().toISOString(), likedBy: [] };
+    const activity: Activity = { id: uid('activity'), centerId: req.user!.centerId, classroomId: children[0]!.classroomId, childIds: body.childIds, authorId: req.user!.id, authorName: req.user!.name, type: body.type, title: body.title, body: body.body, value: body.value, mediaUrl: body.mediaUrl, createdAt: new Date().toISOString(), likedBy: [] };
     store().activities.unshift(activity);
     broadcast('activity:created', activity);
     return res.status(201).json(activity);
   });
   app.patch('/api/activities/:activityId/like', authenticate, (req: AuthRequest, res) => {
     const activity = store().activities.find(item => item.id === req.params.activityId && item.centerId === req.user!.centerId);
-    if (!activity) return res.status(404).json({ error: 'not_found', message: 'Moment not found.' });
+    const visible = activity && (req.user!.role === 'admin'
+      || (req.user!.role === 'teacher' && req.user!.classroomIds.includes(activity.classroomId))
+      || (req.user!.role === 'parent' && activity.childIds.some(id => req.user!.childIds.includes(id))));
+    if (!activity || !visible) return res.status(404).json({ error: 'not_found', message: 'Moment not found.' });
     activity.likedBy = activity.likedBy.includes(req.user!.id) ? activity.likedBy.filter(id => id !== req.user!.id) : [...activity.likedBy, req.user!.id];
     broadcast('activity:updated', activity);
     return res.json(activity);
@@ -100,10 +113,10 @@ export function createApp(broadcast: Broadcast = () => undefined) {
     const body = parseBody(messageSchema, req.body, res);
     if (!body) return;
     const child = store().children.find(item => item.id === body.childId && item.centerId === req.user!.centerId);
-    if (!child) return res.status(404).json({ error: 'not_found', message: 'Child conversation not found.' });
-    const classroom = store().classrooms.find(room => room.id === child.classroomId)!;
-    const recipientIds = req.user!.role === 'parent' ? classroom.teacherIds : child.guardianIds;
-    const message: Message = { id: `message-${Date.now()}`, centerId: req.user!.centerId, childId: child.id, senderId: req.user!.id, recipientIds, body: body.body, createdAt: new Date().toISOString(), readBy: [req.user!.id] };
+    if (!child || !inCareOf(req.user!, child)) return res.status(404).json({ error: 'not_found', message: 'Child conversation not found.' });
+    const classroom = store().classrooms.find(room => room.id === child.classroomId);
+    const recipientIds = req.user!.role === 'parent' ? classroom?.teacherIds ?? [] : child.guardianIds;
+    const message: Message = { id: uid('message'), centerId: req.user!.centerId, childId: child.id, senderId: req.user!.id, recipientIds, body: body.body, createdAt: new Date().toISOString(), readBy: [req.user!.id] };
     store().messages.push(message);
     broadcast('message:created', message);
     return res.status(201).json(message);

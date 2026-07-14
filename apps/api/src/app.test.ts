@@ -86,4 +86,33 @@ describe('Child Care Compass API', () => {
     expect(response.status).toBe(201);
     expect(response.body.recipientIds).toContain('user-teacher');
   });
+
+  it('prevents a parent from messaging about another family’s child', async () => {
+    const { app } = createApp();
+    const token = await login(app, 'parent@compass.demo');
+    const response = await request(app)
+      .post('/api/messages')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ childId: 'child-2', body: 'Hello' });
+    expect(response.status).toBe(404);
+  });
+
+  it('prevents a teacher from messaging about a child outside their classrooms', async () => {
+    const { app } = createApp();
+    const token = await login(app, 'teacher@compass.demo');
+    const response = await request(app)
+      .post('/api/messages')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ childId: 'child-9', body: 'Hello' });
+    expect(response.status).toBe(404);
+  });
+
+  it('hides activities from parents whose children are not tagged', async () => {
+    const { app } = createApp();
+    const token = await login(app, 'priya@compass.demo');
+    const response = await request(app)
+      .patch('/api/activities/activity-2/like')
+      .set('Authorization', `Bearer ${token}`);
+    expect(response.status).toBe(404);
+  });
 });

@@ -1,8 +1,9 @@
-import { newDb, type IMemoryDb } from 'pg-mem';
 import type { Activity, Center, Child, Classroom, Curriculum, Invoice, Message, User } from '@compass/shared';
 
+// In-memory demo storage. On Vercel it lives in the function instance's memory
+// and resets when the instance recycles; swap for a managed PostgreSQL database
+// before storing real center data.
 export interface DemoStore {
-  pg: IMemoryDb;
   center: Center;
   users: User[];
   classrooms: Classroom[];
@@ -15,17 +16,8 @@ export interface DemoStore {
 
 const ago = (minutes: number) => new Date(Date.now() - minutes * 60_000).toISOString();
 const ahead = (days: number) => new Date(Date.now() + days * 86_400_000).toISOString().slice(0, 10);
-const sql = (value: unknown) => `'${String(typeof value === 'object' ? JSON.stringify(value) : value).replaceAll("'", "''")}'`;
 
 function seed(): DemoStore {
-  const pg = newDb({ autoCreateForeignKeyIndices: true });
-  pg.public.none(`
-    create table centers (id text primary key, name text not null);
-    create table users (id text primary key, center_id text not null, email text unique not null, role text not null);
-    create table children (id text primary key, center_id text not null, classroom_id text not null, attendance_status text not null);
-    create table activities (id text primary key, center_id text not null, payload jsonb not null);
-  `);
-
   const center: Center = {
     id: 'center-1', name: 'Willow & Wonder Early Learning', address: '1840 Meadow Lane, Columbus, OH',
     phone: '(614) 555-0184', license: 'OH-ELC-28491', capacity: 48,
@@ -101,11 +93,7 @@ function seed(): DemoStore {
     ], documents: [{ name: 'Garden exploration guide', type: 'PDF', size: '1.8 MB' }, { name: 'Family connection note', type: 'DOC', size: '420 KB' }] },
   ];
 
-  pg.public.none(`insert into centers values (${sql(center.id)}, ${sql(center.name)})`);
-  users.forEach(user => pg.public.none(`insert into users values (${sql(user.id)}, ${sql(user.centerId)}, ${sql(user.email)}, ${sql(user.role)})`));
-  children.forEach(child => pg.public.none(`insert into children values (${sql(child.id)}, ${sql(child.centerId)}, ${sql(child.classroomId)}, ${sql(child.attendanceStatus)})`));
-  activities.forEach(activity => pg.public.none(`insert into activities values (${sql(activity.id)}, ${sql(activity.centerId)}, ${sql(activity)})`));
-  return { pg, center, users, classrooms, children, activities, messages, invoices, curriculum };
+  return { center, users, classrooms, children, activities, messages, invoices, curriculum };
 }
 
 let current = seed();

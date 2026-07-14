@@ -1,18 +1,19 @@
 import { FormEvent, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { BookOpen, Camera, Check, ChevronRight, ClipboardCheck, Clock3, Coffee, FileText, Image, LayoutDashboard, MessageCircle, Moon, MoreHorizontal, Plus, Send, Sparkles, Utensils, Users, X } from 'lucide-react';
+import { BookOpen, Camera, Check, ChevronRight, ClipboardCheck, Clock3, Coffee, FileText, LayoutDashboard, MessageCircle, Moon, MoreHorizontal, Plus, Send, Sparkles, Utensils, Users } from 'lucide-react';
 import type { ActivityType, AttendanceStatus, Child } from '@compass/shared';
 import { nextAttendanceStatus } from '@compass/shared';
 import { AppShell } from '../components/AppShell';
-import { Avatar, Button, IconButton, Modal, spring } from '../components/ui';
+import { Avatar, Button, ErrorScreen, IconButton, LoadingScreen, Modal, spring } from '../components/ui';
 import { useActivity, useAttendance, useDashboard, useMessage } from '../hooks/useCompass';
+import { firstName } from '../lib/format';
 import { useSession } from '../lib/session';
 
 const nav = [
   { id: 'today', label: 'Today', icon: <LayoutDashboard size={19}/> },
   { id: 'attendance', label: 'Attendance', icon: <ClipboardCheck size={19}/> },
   { id: 'curriculum', label: 'Curriculum', icon: <BookOpen size={19}/> },
-  { id: 'messages', label: 'Family Messages', icon: <MessageCircle size={19}/>, badge: 1 },
+  { id: 'messages', label: 'Family Messages', icon: <MessageCircle size={19}/> },
 ];
 
 function timeMode() {
@@ -57,14 +58,20 @@ function HandoverModal({ child, onClose }: { child: Child; onClose: () => void }
 }
 
 export function TeacherPortal() {
-  const { data } = useDashboard(); const user = useSession(state => state.user)!; const [active, setActive] = useState('today'); const [quick, setQuick] = useState(false); const [handover, setHandover] = useState<Child | null>(null); const [message, setMessage] = useState(''); const send = useMessage(); const attendance = useAttendance(); const mode = timeMode();
+  const { data, isError, refetch } = useDashboard(); const user = useSession(state => state.user)!; const clear = useSession(state => state.clear); const [active, setActive] = useState('today'); const [quick, setQuick] = useState(false); const [handover, setHandover] = useState<Child | null>(null); const [message, setMessage] = useState(''); const [conversationId, setConversationId] = useState<string | null>(null); const send = useMessage(); const attendance = useAttendance(); const mode = timeMode();
   const columns = useMemo(() => ({ expected: data?.children.filter(child => child.attendanceStatus === 'expected') || [], present: data?.children.filter(child => child.attendanceStatus === 'present') || [], went_home: data?.children.filter(child => child.attendanceStatus === 'went_home') || [] }), [data]);
-  if (!data) return null;
+  if (!data) return isError ? <ErrorScreen onRetry={() => void refetch()} onSignOut={clear}/> : <LoadingScreen/>;
   const move = async (child: Child) => { if (child.attendanceStatus === 'present') return setHandover(child); await attendance.mutateAsync({ childId: child.id, status: nextAttendanceStatus(child.attendanceStatus) }); chime(); };
   const room = data.classrooms[0]; const ratio = Math.ceil(data.stats.present / Math.max(data.stats.staffOnSite, 1));
-  return <AppShell navigation={nav} active={active} onNavigate={setActive}>
+  // A conversation exists for every child with a linked guardian, plus any child with message history.
+  const conversations = data.children.filter(child => child.guardianIds.length || data.messages.some(item => item.childId === child.id));
+  const activeChild = conversations.find(child => child.id === conversationId) ?? conversations[0];
+  const thread = activeChild ? data.messages.filter(item => item.childId === activeChild.id) : [];
+  const unreadFor = (childId: string) => data.messages.filter(item => item.childId === childId && item.senderId !== user.id && !item.readBy.includes(user.id)).length;
+  const navigation = nav.map(item => item.id === 'messages' ? { ...item, badge: data.stats.unreadMessages } : item);
+  return <AppShell navigation={navigation} active={active} onNavigate={setActive}>
     <main className={`portal-page teacher-page mode-${mode.tone}`}>
-      <div className="teacher-welcome"><div><p className="eyebrow"><span className="live-pulse"/>{mode.label}</p><h1>{mode.title}, {user.name.split(' ')[0]}.</h1><p>{mode.note}</p></div><div className="room-chip"><span style={{ background: room?.color }}>☀</span><div><b>{room?.name}</b><small>{room?.ageRange}</small></div></div></div>
+      <div className="teacher-welcome"><div><p className="eyebrow"><span className="live-pulse"/>{mode.label}</p><h1>{mode.title}, {firstName(user.name)}.</h1><p>{mode.note}</p></div><div className="room-chip"><span style={{ background: room?.color }}>☀</span><div><b>{room?.name}</b><small>{room?.ageRange}</small></div></div></div>
 
       {active === 'today' ? <div className="teacher-layout"><section className="teacher-primary"><div className="teacher-stat-row"><article><span className="stat-icon present"><Users/></span><div><p>Present now</p><h2>{data.stats.present}<small> of {data.children.length}</small></h2></div></article><article><span className="stat-icon ratio"><Sparkles/></span><div><p>Live ratio</p><h2>1:{ratio}<small> / 1:{room?.ratioLimit}</small></h2></div><span className="safe-pill">Comfortable</span></article><article><span className="stat-icon message"><MessageCircle/></span><div><p>Family messages</p><h2>{data.stats.unreadMessages}<small> unread</small></h2></div></article></div>
         <section className="quick-bento"><header><div><p className="eyebrow">One-tap care log</p><h2>What’s happening now?</h2></div><button onClick={() => setQuick(true)}>Open all <ChevronRight size={15}/></button></header><div><motion.button whileTap={{ scale: .94 }} onClick={() => setQuick(true)} className="quick-photo"><Camera/><span><b>Share a moment</b><small>Photo + family update</small></span><Plus/></motion.button><motion.button whileTap={{ scale: .94 }} onClick={() => setQuick(true)} className="quick-meal"><Utensils/><span><b>Log meal</b><small>Fast portions</small></span></motion.button><motion.button whileTap={{ scale: .94 }} onClick={() => setQuick(true)} className="quick-nap"><Moon/><span><b>Log nap</b><small>Start or finish</small></span></motion.button><motion.button whileTap={{ scale: .94 }} onClick={() => setQuick(true)} className="quick-note"><FileText/><span><b>Care note</b><small>Add detail</small></span></motion.button></div></section>
@@ -76,7 +83,7 @@ export function TeacherPortal() {
 
       {active === 'curriculum' ? <section className="curriculum-page"><div className="curriculum-hero"><div><p className="eyebrow">Today’s curriculum</p><h1>{data.curriculum[0]?.theme}</h1><p>{data.curriculum[0]?.goal}</p></div><span className="hero-flower">✿</span></div><div className="curriculum-grid"><article className="panel"><p className="eyebrow">Materials basket</p><h2>Gather these</h2><ul className="material-list">{data.curriculum[0]?.materials.map(item => <li key={item}><Check/>{item}</li>)}</ul></article><article className="panel"><p className="eyebrow">Day rhythm</p><h2>Learning plan</h2><div className="schedule-full">{data.curriculum[0]?.schedule.map(item => <div key={item.time}><time>{item.time}</time><i/><span><b>{item.title}</b><p>{item.detail}</p></span></div>)}</div></article><article className="panel documents-card"><p className="eyebrow">Teacher resources</p><h2>Documents</h2>{data.curriculum[0]?.documents.map(doc => <button key={doc.name}><span><FileText/></span><div><b>{doc.name}</b><small>{doc.type} · {doc.size}</small></div><ChevronRight/></button>)}</article></div></section> : null}
 
-      {active === 'messages' ? <section className="messages-page panel"><aside><p className="eyebrow">Family inbox</p><h2>Conversations</h2><button className="active"><Avatar label="Mia Morgan" tone="sun"/><span><b>Mia’s family</b><small>That makes me so happy…</small></span><i>1</i></button><button><Avatar label="Arlo Shah" tone="mint"/><span><b>Arlo’s family</b><small>Thank you!</small></span></button></aside><main><header><Avatar label="Mia Morgan" tone="sun"/><div><b>Mia’s family</b><small>Alex Morgan · Parent</small></div></header><div className="chat-thread">{data.messages.filter(item => item.childId === 'child-1').map(item => <div key={item.id} className={item.senderId === user.id ? 'mine' : ''}><span>{item.body}</span><time>{new Date(item.createdAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</time></div>)}</div><form onSubmit={async event => { event.preventDefault(); if (!message.trim()) return; await send.mutateAsync({ childId: 'child-1', body: message }); setMessage(''); }}><button type="button" aria-label="Attach"><Plus/></button><input value={message} onChange={event => setMessage(event.target.value)} placeholder="Write a warm update…"/><Button className="button-primary" disabled={!message.trim()}><Send/></Button></form></main></section> : null}
+      {active === 'messages' ? <section className="messages-page panel"><aside><p className="eyebrow">Family inbox</p><h2>Conversations</h2>{conversations.map(child => { const last = data.messages.filter(item => item.childId === child.id).at(-1); const unread = unreadFor(child.id); return <button key={child.id} className={child.id === activeChild?.id ? 'active' : ''} onClick={() => setConversationId(child.id)}><Avatar label={`${child.firstName} ${child.lastName}`} tone={child.avatar}/><span><b>{child.firstName}’s family</b><small>{last ? last.body : 'Start the conversation'}</small></span>{unread ? <i>{unread}</i> : null}</button>; })}</aside>{activeChild ? <main><header><Avatar label={`${activeChild.firstName} ${activeChild.lastName}`} tone={activeChild.avatar}/><div><b>{activeChild.firstName}’s family</b><small>Parents & guardians of {activeChild.firstName}</small></div></header><div className="chat-thread">{thread.map(item => <div key={item.id} className={item.senderId === user.id ? 'mine' : ''}><span>{item.body}</span><time>{new Date(item.createdAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</time></div>)}</div><form onSubmit={async event => { event.preventDefault(); if (!message.trim()) return; await send.mutateAsync({ childId: activeChild.id, body: message }); setMessage(''); }}><button type="button" aria-label="Attach"><Plus/></button><input value={message} onChange={event => setMessage(event.target.value)} placeholder="Write a warm update…"/><Button className="button-primary" disabled={!message.trim()}><Send/></Button></form></main> : null}</section> : null}
     </main>
     <AnimatePresence>{quick ? <QuickLog children={data.children} onClose={() => setQuick(false)}/> : null}{handover ? <HandoverModal child={handover} onClose={() => setHandover(null)}/> : null}</AnimatePresence>
   </AppShell>;

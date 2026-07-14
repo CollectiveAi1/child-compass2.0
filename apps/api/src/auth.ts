@@ -4,6 +4,9 @@ import type { Role, User } from '@compass/shared';
 import { store } from './store';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'compass-demo-secret-change-in-production';
+if (!process.env.JWT_SECRET && process.env.NODE_ENV === 'production') {
+  console.warn('JWT_SECRET is not set — tokens are signed with the built-in demo secret. Set JWT_SECRET in your environment before real use.');
+}
 
 export interface AuthRequest extends Request { user?: User }
 

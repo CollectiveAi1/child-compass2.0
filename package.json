@@ -18,7 +18,7 @@
     "test:e2e": "node scripts/visual-qa.mjs",
     "test:watch": "vitest",
     "typecheck": "npm run typecheck -w @compass/shared && npm run typecheck -w @compass/api && npm run typecheck -w @compass/web",
-    "lint": "eslint . --ext .ts,.tsx --max-warnings 0"
+    "lint": "eslint . --max-warnings 0"
   },
   "devDependencies": {
     "@eslint/js": "^9.8.0",

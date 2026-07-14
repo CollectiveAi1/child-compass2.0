@@ -30,10 +30,17 @@ export function Modal({ title, eyebrow, children, onClose, wide = false }: { tit
   </motion.div>;
 }
 
-export function EmptyState({ icon, title, body }: { icon: ReactNode; title: string; body: string }) {
-  return <div className="empty-state"><span>{icon}</span><h3>{title}</h3><p>{body}</p></div>;
-}
-
 export function LoadingScreen() {
   return <div className="loading-screen"><Logo /><div className="loading-orbit"><span /><span /><span /></div><p>Gathering today’s little moments…</p></div>;
+}
+
+export function ErrorScreen({ onRetry, onSignOut, message = 'We couldn’t reach your center right now. Check your connection and try again.' }: { onRetry: () => void; onSignOut: () => void; message?: string }) {
+  return <div className="loading-screen" role="alert">
+    <Logo />
+    <p>{message}</p>
+    <div style={{ display: 'flex', gap: 12 }}>
+      <Button className="button-primary" onClick={onRetry}>Try again</Button>
+      <Button className="button-ghost" onClick={onSignOut}>Sign out</Button>
+    </div>
+  </div>;
 }

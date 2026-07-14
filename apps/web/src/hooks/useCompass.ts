@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { io } from 'socket.io-client';
 import { create } from 'zustand';
 import type { ActivityType, AttendanceStatus } from '@compass/shared';
-import { API_BASE, api, getDashboard } from '../lib/api';
+import { API_BASE, ApiFailure, api, getDashboard } from '../lib/api';
 import { useSession } from '../lib/session';
 
 const POLL_INTERVAL = 15_000;
@@ -12,10 +12,17 @@ const useLiveSyncState = create<{ connected: boolean; setConnected: (connected: 
 
 export function useDashboard() {
   const token = useSession(state => state.token)!;
+  const clear = useSession(state => state.clear);
   const live = useLiveSyncState(state => state.connected);
   // WebSocket sync pushes invalidations instantly; without it (Vercel serverless,
   // flaky mobile networks) the dashboard falls back to polling.
-  return useQuery({ queryKey: ['dashboard'], queryFn: () => getDashboard(token), staleTime: 10_000, refetchInterval: live ? false : POLL_INTERVAL });
+  const query = useQuery({ queryKey: ['dashboard'], queryFn: () => getDashboard(token), staleTime: 10_000, refetchInterval: live ? false : POLL_INTERVAL });
+  // A persisted session can outlive its 12h token; send the user back to sign-in
+  // instead of leaving them on a dead dashboard.
+  useEffect(() => {
+    if (query.error instanceof ApiFailure && query.error.status === 401) clear();
+  }, [query.error, clear]);
+  return query;
 }
 
 export function useLiveSync() {

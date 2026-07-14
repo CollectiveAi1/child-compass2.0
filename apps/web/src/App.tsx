@@ -3,7 +3,6 @@ import { HashRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { portalForRole } from '@compass/shared';
 import { LoginScreen } from './components/LoginScreen';
-import { LoadingScreen } from './components/ui';
 import { AdminPortal } from './portals/AdminPortal';
 import { TeacherPortal } from './portals/TeacherPortal';
 import { ParentPortal } from './portals/ParentPortal';
