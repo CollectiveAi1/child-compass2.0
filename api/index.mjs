@@ -478,7 +478,8 @@ function createApp(broadcast = () => void 0) {
   });
   app2.patch("/api/messages/:messageId/read", authenticate, (req, res) => {
     const message = store().messages.find((item) => item.id === req.params.messageId && item.centerId === req.user.centerId);
-    if (!message) return res.status(404).json({ error: "not_found", message: "Message not found." });
+    const involved = message && (req.user.role === "admin" || message.senderId === req.user.id || message.recipientIds.includes(req.user.id));
+    if (!message || !involved) return res.status(404).json({ error: "not_found", message: "Message not found." });
     if (!message.readBy.includes(req.user.id)) message.readBy.push(req.user.id);
     return res.json(message);
   });

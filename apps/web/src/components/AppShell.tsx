@@ -27,7 +27,7 @@ export function AppShell({ children, navigation, active, onNavigate, mobile = fa
   const user = useSession(state => state.user)!;
   const clear = useSession(state => state.clear);
   const [collapsed, setCollapsed] = useState(false);
-  const [menu, setMenu] = useState<'bell' | 'user' | null>(null);
+  const [menu, setMenu] = useState<'bell' | 'user' | 'center' | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -48,7 +48,15 @@ export function AppShell({ children, navigation, active, onNavigate, mobile = fa
       <header className="topbar">
         {mobile ? <Logo/> : <div className="topbar-lead"><IconButton label={collapsed ? 'Expand navigation' : 'Collapse navigation'} onClick={() => setCollapsed(value => !value)}><Menu size={20}/></IconButton><h1 className="topbar-title">{title ?? navigation.find(item => item.id === active)?.label ?? ''}</h1></div>}
         <div className="topbar-actions" ref={menuRef}>
-          {mobile ? null : <div className="center-switcher"><span className="center-dot"><School size={18}/></span><div><b>{centerName}</b>{centerDetail ? <small>{centerDetail}</small> : null}</div><ChevronDown size={16}/></div>}
+          {mobile ? null : <div className="menu-anchor">
+            <button className="center-switcher" aria-expanded={menu === 'center'} onClick={() => setMenu(value => value === 'center' ? null : 'center')}>
+              <span className="center-dot"><School size={18}/></span><div><b>{centerName}</b></div><ChevronDown size={16}/>
+            </button>
+            {menu === 'center' ? <div className="dropdown-panel center-panel" role="menu">
+              <header><b>{centerName}</b><span>Your center</span></header>
+              {centerDetail ? <p className="dropdown-empty">{centerDetail}</p> : <p className="dropdown-empty">All portals in this demo share one connected center.</p>}
+            </div> : null}
+          </div>}
           <div className="menu-anchor">
             <IconButton label={`Notifications${notifications.length ? ` (${notifications.length})` : ''}`} aria-expanded={menu === 'bell'} onClick={() => setMenu(value => value === 'bell' ? null : 'bell')}>
               <Bell size={19}/>{notifications.length ? <i className="notification-count">{notifications.length}</i> : null}

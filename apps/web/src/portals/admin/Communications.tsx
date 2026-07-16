@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Send } from 'lucide-react';
 import type { DashboardData } from '@compass/shared';
 import { Avatar, Button } from '../../components/ui';
-import { useMessage } from '../../hooks/useCompass';
+import { useMarkThreadRead, useMessage } from '../../hooks/useCompass';
 import { useSession } from '../../lib/session';
 import { fmtTime, roomName, SectionHead } from './common';
 
@@ -15,6 +15,8 @@ export function CommunicationsTab({ data }: { data: DashboardData }) {
   const activeChild = conversations.find(child => child.id === conversationId) ?? conversations[0];
   const thread = activeChild ? data.messages.filter(item => item.childId === activeChild.id) : [];
   const unreadFor = (childId: string) => data.messages.filter(item => item.childId === childId && item.senderId !== user.id && !item.readBy.includes(user.id)).length;
+  // Reading a conversation clears its unread badge.
+  useMarkThreadRead(thread, user.id);
 
   return <>
     <SectionHead title="Communications" subtitle="Direct, documented messaging with every enrolled family."/>

@@ -73,7 +73,7 @@ export function AdminPortal() {
   const nav = navigation.map(item => item.id === 'communications' && messageBadge ? { ...item, badge: messageBadge } : item);
   const consumeIntent = () => setIntent(null);
 
-  return <AppShell navigation={nav} active={active} onNavigate={id => { setActive(id); setIntent(null); }} centerName={data.center.name} notifications={notifications}>
+  return <AppShell navigation={nav} active={active} onNavigate={id => { setActive(id); setIntent(null); }} centerName={data.center.name} centerDetail={`${data.center.address} · ${data.center.phone} · License ${data.center.license}`} notifications={notifications}>
     <main className="portal-page admin-page">
       {active === 'dashboard' ? <DashboardTab data={data} onAction={handleAction}/> : null}
       {active === 'enrollment' ? <EnrollmentTab data={data}/> : null}

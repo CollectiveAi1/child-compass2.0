@@ -1,8 +1,8 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { io } from 'socket.io-client';
 import { create } from 'zustand';
-import type { ActivityType, AttendanceStatus, ChildMedical, DocumentCategory, MealType, StaffCredential } from '@compass/shared';
+import type { ActivityType, AttendanceStatus, ChildMedical, DocumentCategory, MealType, Message, StaffCredential } from '@compass/shared';
 import { API_BASE, ApiFailure, api, getDashboard } from '../lib/api';
 import { useSession } from '../lib/session';
 
@@ -74,3 +74,15 @@ export const useDeleteDocument = () => useCompassMutation<{ documentId: string }
 export const useCreateInvoice = () => useCompassMutation<{ childId: string; amount: number; dueDate: string; description: string }>(() => '/invoices', 'POST', v => v);
 export const useRecordPayment = () => useCompassMutation<{ invoiceId: string; method: string }>(v => `/invoices/${v.invoiceId}/record-payment`, 'POST', ({ invoiceId: _id, ...rest }) => rest);
 export const useUpdateCenter = () => useCompassMutation<{ name?: string; address?: string; phone?: string; license?: string; capacity?: number }>(() => '/center', 'PATCH', v => v);
+
+// Marks the visible thread's incoming messages as read so unread badges clear.
+// Pass `undefined` while the messages view is closed to leave counts alone.
+export function useMarkThreadRead(thread: Message[] | undefined, userId: string) {
+  const markRead = useCompassMutation<{ messageId: string }>(v => `/messages/${v.messageId}/read`, 'PATCH', () => ({}));
+  const { mutate } = markRead;
+  const seen = useRef(new Set<string>());
+  useEffect(() => {
+    thread?.filter(message => message.senderId !== userId && !message.readBy.includes(userId) && !seen.current.has(message.id))
+      .forEach(message => { seen.current.add(message.id); mutate({ messageId: message.id }); });
+  }, [thread, userId, mutate]);
+}
