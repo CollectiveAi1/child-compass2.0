@@ -4,8 +4,8 @@ import { Compass, X } from 'lucide-react';
 
 export const spring = { type: 'spring' as const, damping: 25, stiffness: 200 };
 
-export function Logo({ compact = false }: { compact?: boolean }) {
-  return <div className="logo-lockup"><span className="logo-mark"><Compass size={23} strokeWidth={2.4} /></span>{compact ? null : <span><b>Child Care</b><em>Compass</em></span>}</div>;
+export function Logo() {
+  return <div className="logo-lockup"><span className="logo-mark"><Compass size={23} strokeWidth={2.4} /></span><span><b>Child Compass</b><em>Guiding Growth. Every Step.</em></span></div>;
 }
 
 export function Avatar({ label, tone = 'sky', size = 'md' }: { label: string; tone?: string; size?: 'sm' | 'md' | 'lg' }) {

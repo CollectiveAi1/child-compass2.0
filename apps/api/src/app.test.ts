@@ -115,4 +115,114 @@ describe('Child Care Compass API', () => {
       .set('Authorization', `Bearer ${token}`);
     expect(response.status).toBe(404);
   });
+
+  it('lets admins add a child who then appears on the roster', async () => {
+    const { app } = createApp();
+    const token = await login(app, 'admin@compass.demo');
+    const created = await request(app)
+      .post('/api/children')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ firstName: 'Sunny', lastName: 'Rae', birthday: '2023-02-14', classroomId: 'room-sunbeams', guardianName: 'Jo Rae', guardianPhone: '(614) 555-0999' });
+    expect(created.status).toBe(201);
+    const dashboard = await request(app).get('/api/dashboard').set('Authorization', `Bearer ${token}`);
+    expect(dashboard.body.children.some((child: { id: string }) => child.id === created.body.id)).toBe(true);
+  });
+
+  it('creates a child record when an application is marked enrolled', async () => {
+    const { app } = createApp();
+    const token = await login(app, 'admin@compass.demo');
+    const before = (await request(app).get('/api/dashboard').set('Authorization', `Bearer ${token}`)).body.children.length;
+    const response = await request(app)
+      .patch('/api/enrollments/enrollment-1')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ status: 'enrolled' });
+    expect(response.status).toBe(200);
+    expect(response.body.status).toBe('enrolled');
+    const after = (await request(app).get('/api/dashboard').set('Authorization', `Bearer ${token}`)).body.children.length;
+    expect(after).toBe(before + 1);
+  });
+
+  it('records a manual payment against an invoice', async () => {
+    const { app } = createApp();
+    const token = await login(app, 'admin@compass.demo');
+    const response = await request(app)
+      .post('/api/invoices/invoice-3/record-payment')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ method: 'Check' });
+    expect(response.status).toBe(200);
+    expect(response.body.status).toBe('paid');
+    expect(response.body.method).toBe('Check');
+  });
+
+  it('lets teachers upload and download documents but keeps parents out', async () => {
+    const { app } = createApp();
+    const teacherToken = await login(app, 'teacher@compass.demo');
+    const parentToken = await login(app, 'parent@compass.demo');
+    const uploaded = await request(app)
+      .post('/api/documents')
+      .set('Authorization', `Bearer ${teacherToken}`)
+      .send({ name: 'Weekly plan.txt', category: 'curriculum', contentType: 'text/plain', size: 11, dataUrl: 'data:text/plain;base64,aGVsbG8gdGhlcmU=' });
+    expect(uploaded.status).toBe(201);
+    expect(uploaded.body.dataUrl).toBeUndefined();
+
+    const downloaded = await request(app).get(`/api/documents/${uploaded.body.id}`).set('Authorization', `Bearer ${teacherToken}`);
+    expect(downloaded.status).toBe(200);
+    expect(downloaded.body.dataUrl).toBe('data:text/plain;base64,aGVsbG8gdGhlcmU=');
+
+    const forbidden = await request(app).get(`/api/documents/${uploaded.body.id}`).set('Authorization', `Bearer ${parentToken}`);
+    expect(forbidden.status).toBe(403);
+  });
+
+  it('blocks teachers from deleting documents they did not upload', async () => {
+    const { app } = createApp();
+    const teacherToken = await login(app, 'teacher@compass.demo');
+    const adminToken = await login(app, 'admin@compass.demo');
+    const denied = await request(app).delete('/api/documents/document-1').set('Authorization', `Bearer ${teacherToken}`);
+    expect(denied.status).toBe(403);
+    const allowed = await request(app).delete('/api/documents/document-1').set('Authorization', `Bearer ${adminToken}`);
+    expect(allowed.status).toBe(200);
+  });
+
+  it('upserts CACFP meal counts per date and meal', async () => {
+    const { app } = createApp();
+    const token = await login(app, 'admin@compass.demo');
+    const date = new Date().toISOString().slice(0, 10);
+    const first = await request(app).post('/api/meals').set('Authorization', `Bearer ${token}`).send({ date, meal: 'snack', childCount: 12, adultCount: 3 });
+    expect(first.status).toBe(201);
+    const second = await request(app).post('/api/meals').set('Authorization', `Bearer ${token}`).send({ date, meal: 'snack', childCount: 14, adultCount: 3 });
+    expect(second.status).toBe(200);
+    const dashboard = await request(app).get('/api/dashboard').set('Authorization', `Bearer ${token}`);
+    const snacks = dashboard.body.meals.filter((record: { date: string; meal: string }) => record.date === date && record.meal === 'snack');
+    expect(snacks).toHaveLength(1);
+    expect(snacks[0].childCount).toBe(14);
+  });
+
+  it('keeps the attendance log in step with live check-ins', async () => {
+    const { app } = createApp();
+    const token = await login(app, 'teacher@compass.demo');
+    const date = new Date().toISOString().slice(0, 10);
+    await request(app).patch('/api/attendance/child-4').set('Authorization', `Bearer ${token}`).send({ status: 'present' });
+    let dashboard = await request(app).get('/api/dashboard').set('Authorization', `Bearer ${token}`);
+    expect(dashboard.body.attendanceLog.some((entry: { date: string; childId: string; status: string }) => entry.date === date && entry.childId === 'child-4' && entry.status === 'present')).toBe(true);
+    await request(app).patch('/api/attendance/child-4').set('Authorization', `Bearer ${token}`).send({ status: 'expected' });
+    dashboard = await request(app).get('/api/dashboard').set('Authorization', `Bearer ${token}`);
+    expect(dashboard.body.attendanceLog.some((entry: { date: string; childId: string }) => entry.date === date && entry.childId === 'child-4')).toBe(false);
+  });
+
+  it('lets admins update the center profile', async () => {
+    const { app } = createApp();
+    const token = await login(app, 'admin@compass.demo');
+    const response = await request(app).patch('/api/center').set('Authorization', `Bearer ${token}`).send({ phone: '(614) 555-0400', capacity: 52 });
+    expect(response.status).toBe(200);
+    expect(response.body.phone).toBe('(614) 555-0400');
+    expect(response.body.capacity).toBe(52);
+  });
+
+  it('strips document bytes from the dashboard payload', async () => {
+    const { app } = createApp();
+    const token = await login(app, 'admin@compass.demo');
+    const dashboard = await request(app).get('/api/dashboard').set('Authorization', `Bearer ${token}`);
+    expect(dashboard.body.documents.length).toBeGreaterThan(0);
+    expect(dashboard.body.documents.every((document: Record<string, unknown>) => document.dataUrl === undefined)).toBe(true);
+  });
 });

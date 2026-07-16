@@ -5,7 +5,7 @@ import type { Role } from '@compass/shared';
 import { Button, Logo, spring } from './ui';
 
 const roles = [
-  { role: 'admin' as const, title: 'Admin', name: 'Maya Brooks', email: 'admin@compass.demo', note: 'Control center, people, billing & compliance', icon: Building2, tone: 'blue' },
+  { role: 'admin' as const, title: 'Admin', name: 'Sarah Johnson · Director', email: 'admin@compass.demo', note: 'Dashboard, enrollment, billing, CACFP & reports', icon: Building2, tone: 'blue' },
   { role: 'teacher' as const, title: 'Teacher', name: 'Jordan Ellis', email: 'teacher@compass.demo', note: 'Living dashboard, attendance & quick logs', icon: GraduationCap, tone: 'mint' },
   { role: 'parent' as const, title: 'Parent', name: 'Alex Morgan', email: 'parent@compass.demo', note: 'Daily stories, messages & family billing', icon: Heart, tone: 'pink' },
 ];
@@ -17,8 +17,8 @@ export function LoginScreen({ onLogin, loading, error }: { onLogin: (email: stri
     <div className="login-doodle doodle-one">✦</div><div className="login-doodle doodle-two">⌁</div><div className="login-doodle doodle-three">♡</div>
     <section className="login-story">
       <Logo />
-      <div className="login-copy"><p className="eyebrow"><Sparkles size={15} /> A calmer kind of child care software</p><h1>Every little moment,<br/><em>beautifully connected.</em></h1><p>One nurturing place for center teams to move faster—and families to feel closer.</p></div>
-      <div className="login-illustration" aria-label="A playful path connecting school and home"><span className="sun-shape">☀</span><div className="little-school"><i/><i/><b>Willow &<br/>Wonder</b></div><div className="path-line"/><div className="little-home"><span>♡</span></div><div className="tiny-tree">♧</div></div>
+      <div className="login-copy"><p className="eyebrow"><Sparkles size={15} /> A calmer kind of child care software</p><h1>Guiding growth.<br/><em>Every step.</em></h1><p>One nurturing place for center teams to move faster—and families to feel closer.</p></div>
+      <div className="login-illustration" aria-label="A playful path connecting school and home"><span className="sun-shape">☀</span><div className="little-school"><i/><i/><b>Bright<br/>Path</b></div><div className="path-line"/><div className="little-home"><span>♡</span></div><div className="tiny-tree">♧</div></div>
       <p className="trust-note"><LockKeyhole size={14} /> Private by design · Built for real child care days</p>
     </section>
     <section className="login-panel">

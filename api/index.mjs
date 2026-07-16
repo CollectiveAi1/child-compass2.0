@@ -11,102 +11,241 @@ import jwt from "jsonwebtoken";
 // apps/api/src/store.ts
 var ago = (minutes) => new Date(Date.now() - minutes * 6e4).toISOString();
 var ahead = (days) => new Date(Date.now() + days * 864e5).toISOString().slice(0, 10);
+var today = () => (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+function pastWeekdays(count) {
+  const days = [];
+  const cursor = /* @__PURE__ */ new Date();
+  while (days.length < count) {
+    cursor.setDate(cursor.getDate() - 1);
+    if (cursor.getDay() !== 0 && cursor.getDay() !== 6) days.unshift(cursor.toISOString().slice(0, 10));
+  }
+  return days;
+}
+function tinyPdf(title, lines) {
+  const escape = (text) => text.replace(/[\\()]/g, (char) => `\\${char}`);
+  const body = [`BT /F1 16 Tf 72 740 Td (${escape(title)}) Tj ET`, "BT /F1 11 Tf 14 TL 72 710 Td", ...lines.map((line) => `(${escape(line)}) Tj T*`), "ET"].join("\n");
+  const objects = [
+    "<< /Type /Catalog /Pages 2 0 R >>",
+    "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>",
+    `<< /Length ${body.length} >>
+stream
+${body}
+endstream`,
+    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>"
+  ];
+  let pdf = "%PDF-1.4\n";
+  const offsets = [];
+  objects.forEach((object, index) => {
+    offsets.push(pdf.length);
+    pdf += `${index + 1} 0 obj
+${object}
+endobj
+`;
+  });
+  const xref = pdf.length;
+  pdf += `xref
+0 ${objects.length + 1}
+0000000000 65535 f 
+${offsets.map((offset) => `${String(offset).padStart(10, "0")} 00000 n 
+`).join("")}`;
+  pdf += `trailer
+<< /Size ${objects.length + 1} /Root 1 0 R >>
+startxref
+${xref}
+%%EOF`;
+  return `data:application/pdf;base64,${Buffer.from(pdf, "binary").toString("base64")}`;
+}
+function medicalFor(index, allergies) {
+  const physicians = ["Dr. Emily Carter", "Dr. Raj Patel", "Dr. Susan Lee", "Dr. Marcus Webb"];
+  return {
+    physician: physicians[index % physicians.length],
+    physicianPhone: `(614) 555-0${(140 + index).toString()}`,
+    conditions: allergies.length ? `Allergy: ${allergies.join(", ")}` : "None reported",
+    medications: allergies.includes("Peanuts") ? "EpiPen Jr \u2014 stored in front office" : "None",
+    lastPhysical: ahead(-(120 + index * 11)),
+    immunizations: [
+      { name: "DTaP", date: ahead(-(200 + index * 9)), status: "complete" },
+      { name: "MMR", date: ahead(-(320 + index * 7)), status: "complete" },
+      { name: "Varicella", date: ahead(-(300 + index * 5)), status: index % 6 === 4 ? "due" : "complete" },
+      { name: "Hepatitis B", date: ahead(-(400 + index * 3)), status: index % 9 === 7 ? "overdue" : "complete" }
+    ],
+    emergencyContacts: [
+      { name: "Primary guardian", relation: "Parent", phone: `(614) 555-0${(160 + index).toString()}` },
+      { name: "Backup contact", relation: "Grandparent", phone: `(614) 555-0${(180 + index).toString()}` }
+    ]
+  };
+}
 function seed() {
   const center = {
     id: "center-1",
-    name: "Willow & Wonder Early Learning",
+    name: "Bright Path Learning Center",
     address: "1840 Meadow Lane, Columbus, OH",
     phone: "(614) 555-0184",
     license: "OH-ELC-28491",
     capacity: 48
   };
   const users = [
-    { id: "user-admin", centerId: center.id, name: "Maya Brooks", email: "admin@compass.demo", role: "admin", avatar: "MB", classroomIds: [], childIds: [] },
-    { id: "user-teacher", centerId: center.id, name: "Jordan Ellis", email: "teacher@compass.demo", role: "teacher", avatar: "JE", classroomIds: ["room-sunbeams"], childIds: [] },
-    { id: "user-teacher-2", centerId: center.id, name: "Sofia Martinez", email: "sofia@compass.demo", role: "teacher", avatar: "SM", classroomIds: ["room-sunbeams"], childIds: [] },
-    { id: "user-teacher-3", centerId: center.id, name: "Amara Wilson", email: "amara@compass.demo", role: "teacher", avatar: "AW", classroomIds: ["room-meadow"], childIds: [] },
+    { id: "user-admin", centerId: center.id, name: "Sarah Johnson", email: "admin@compass.demo", role: "admin", avatar: "SJ", classroomIds: [], childIds: [], title: "Director", phone: "(614) 555-0100", hiredOn: "2019-08-12", credentials: [{ name: "Administrator License", issued: "2019-08-01", expires: ahead(320) }, { name: "CPR & First Aid", issued: ahead(-540), expires: ahead(190) }] },
+    { id: "user-teacher", centerId: center.id, name: "Jordan Ellis", email: "teacher@compass.demo", role: "teacher", avatar: "JE", classroomIds: ["room-sunbeams"], childIds: [], title: "Lead Teacher", phone: "(614) 555-0101", hiredOn: "2021-03-02", credentials: [{ name: "CDA Credential", issued: "2021-01-15", expires: ahead(410) }, { name: "CPR & First Aid", issued: ahead(-718), expires: ahead(12) }] },
+    { id: "user-teacher-2", centerId: center.id, name: "Sofia Martinez", email: "sofia@compass.demo", role: "teacher", avatar: "SM", classroomIds: ["room-sunbeams"], childIds: [], title: "Assistant Teacher", phone: "(614) 555-0102", hiredOn: "2022-09-19", credentials: [{ name: "CPR & First Aid", issued: ahead(-300), expires: ahead(430) }] },
+    { id: "user-teacher-3", centerId: center.id, name: "Amara Wilson", email: "amara@compass.demo", role: "teacher", avatar: "AW", classroomIds: ["room-meadow"], childIds: [], title: "Lead Teacher", phone: "(614) 555-0103", hiredOn: "2020-06-08", credentials: [{ name: "CDA Credential", issued: "2020-05-01", expires: ahead(150) }, { name: "CPR & First Aid", issued: ahead(-200), expires: ahead(530) }] },
+    { id: "user-teacher-4", centerId: center.id, name: "Lisa Parker", email: "lisa@compass.demo", role: "teacher", avatar: "LP", classroomIds: ["room-nest"], childIds: [], title: "Infant Lead Teacher", phone: "(614) 555-0104", hiredOn: "2023-01-23", credentials: [{ name: "Infant/Toddler CDA", issued: "2023-01-05", expires: ahead(260) }, { name: "CPR & First Aid", issued: ahead(-100), expires: ahead(630) }] },
     { id: "user-parent", centerId: center.id, name: "Alex Morgan", email: "parent@compass.demo", role: "parent", avatar: "AM", classroomIds: [], childIds: ["child-1"] },
     { id: "user-parent-2", centerId: center.id, name: "Priya Shah", email: "priya@compass.demo", role: "parent", avatar: "PS", classroomIds: [], childIds: ["child-2"] }
   ];
   const classrooms = [
-    { id: "room-sunbeams", centerId: center.id, name: "Sunbeam Studio", ageRange: "2\u20133 years", color: "#f6b4c6", capacity: 12, ratioLimit: 6, teacherIds: ["user-teacher", "user-teacher-2"] },
-    { id: "room-meadow", centerId: center.id, name: "Meadow Makers", ageRange: "3\u20135 years", color: "#98d9cf", capacity: 18, ratioLimit: 9, teacherIds: ["user-teacher-3"] },
-    { id: "room-nest", centerId: center.id, name: "Cozy Nest", ageRange: "6\u201324 months", color: "#a9c8f5", capacity: 8, ratioLimit: 4, teacherIds: [] }
+    { id: "room-sunbeams", centerId: center.id, name: "Sunbeam Studio", ageRange: "2\u20133 years", color: "#f2789f", capacity: 12, ratioLimit: 6, teacherIds: ["user-teacher", "user-teacher-2"] },
+    { id: "room-meadow", centerId: center.id, name: "Meadow Makers", ageRange: "3\u20135 years", color: "#14b8a6", capacity: 18, ratioLimit: 9, teacherIds: ["user-teacher-3"] },
+    { id: "room-nest", centerId: center.id, name: "Cozy Nest", ageRange: "6\u201324 months", color: "#5a8dee", capacity: 8, ratioLimit: 4, teacherIds: ["user-teacher-4"] }
   ];
-  const sunbeamSeeds = [
-    ["child-1", "Mia", "Morgan", "2023-09-14", "present", "sun"],
-    ["child-2", "Arlo", "Shah", "2023-06-02", "present", "mint"],
-    ["child-3", "Noah", "Williams", "2023-11-21", "present", "blue"],
-    ["child-4", "Lily", "Chen", "2024-01-10", "expected", "pink"],
-    ["child-5", "Theo", "Johnson", "2023-08-28", "present", "lilac"],
-    ["child-6", "Zoe", "Davis", "2023-05-19", "expected", "peach"],
-    ["child-7", "Kai", "Brown", "2023-12-04", "went_home", "aqua"],
-    ["child-8", "Nora", "Garcia", "2023-07-17", "present", "yellow"]
+  const childSeeds = [
+    ["child-1", "room-sunbeams", "Mia", "Morgan", "2023-09-14", "present", "sun"],
+    ["child-2", "room-sunbeams", "Arlo", "Shah", "2023-06-02", "present", "mint"],
+    ["child-3", "room-sunbeams", "Noah", "Williams", "2023-11-21", "present", "blue"],
+    ["child-4", "room-sunbeams", "Lily", "Chen", "2024-01-10", "expected", "pink"],
+    ["child-5", "room-sunbeams", "Theo", "Johnson", "2023-08-28", "present", "lilac"],
+    ["child-6", "room-sunbeams", "Zoe", "Davis", "2023-05-19", "expected", "peach"],
+    ["child-7", "room-sunbeams", "Kai", "Brown", "2023-12-04", "went_home", "aqua"],
+    ["child-8", "room-sunbeams", "Nora", "Garcia", "2023-07-17", "present", "yellow"],
+    ["child-9", "room-meadow", "Ava", "Wilson", "2021-11-12", "present", "coral"],
+    ["child-10", "room-meadow", "Ezra", "Thomas", "2022-02-08", "present", "leaf"],
+    ["child-11", "room-meadow", "Ivy", "Lee", "2021-08-25", "expected", "sky"],
+    ["child-12", "room-meadow", "Leo", "Martin", "2022-05-03", "went_home", "violet"],
+    ["child-13", "room-meadow", "Ruby", "Nguyen", "2021-06-30", "present", "pink"],
+    ["child-14", "room-meadow", "Owen", "Clark", "2022-01-17", "present", "blue"],
+    ["child-15", "room-nest", "Emma", "Johnson", "2025-01-04", "present", "sun"],
+    ["child-16", "room-nest", "Miles", "Rivera", "2024-10-22", "present", "mint"],
+    ["child-17", "room-nest", "Sadie", "Kim", "2025-03-15", "expected", "lilac"],
+    ["child-18", "room-nest", "Jack", "Foster", "2024-08-09", "present", "aqua"]
   ];
-  const children = sunbeamSeeds.map(([id, firstName, lastName, birthday, attendanceStatus, avatar], index) => ({
-    id,
-    centerId: center.id,
-    classroomId: "room-sunbeams",
-    guardianIds: index === 0 ? ["user-parent"] : index === 1 ? ["user-parent-2"] : [],
-    firstName,
-    lastName,
-    birthday,
-    avatar,
-    allergies: index === 2 ? ["Peanuts"] : index === 5 ? ["Dairy"] : [],
-    notes: index === 0 ? "Loves music, puzzles, and helping friends." : "Enjoys sensory play and story time.",
-    attendanceStatus,
-    checkedInAt: attendanceStatus === "present" ? ago(205 - index * 8) : void 0,
-    checkedOutAt: attendanceStatus === "went_home" ? ago(22) : void 0,
-    authorizedPickup: index === 0 ? ["Alex Morgan", "Dana Morgan (Grandmother)"] : [`${firstName}'s guardian`]
-  }));
-  children.push(
-    ...[
-      ["child-9", "Ava", "Wilson", "2021-11-12", "present", "coral"],
-      ["child-10", "Ezra", "Thomas", "2022-02-08", "present", "leaf"],
-      ["child-11", "Ivy", "Lee", "2021-08-25", "expected", "sky"],
-      ["child-12", "Leo", "Martin", "2022-05-03", "went_home", "violet"]
-    ].map(([id, firstName, lastName, birthday, attendanceStatus, avatar]) => ({
+  const guardianNames = ["Alex Morgan", "Priya Shah", "Rachel Williams", "Wei Chen", "Michael Brown", "Dana Davis", "Chris Brown", "Elena Garcia", "Tara Wilson", "Sam Thomas", "Grace Lee", "Diego Martin", "Linh Nguyen", "Erin Clark", "Ben Johnson", "Maria Rivera", "Joon Kim", "Holly Foster"];
+  const children = childSeeds.map(([id, classroomId, firstName, lastName, birthday, attendanceStatus, avatar], index) => {
+    const allergies = index === 2 ? ["Peanuts"] : index === 5 ? ["Dairy"] : index === 13 ? ["Eggs"] : [];
+    return {
       id,
       centerId: center.id,
-      classroomId: "room-meadow",
-      guardianIds: [],
+      classroomId,
+      guardianIds: index === 0 ? ["user-parent"] : index === 1 ? ["user-parent-2"] : [],
       firstName,
       lastName,
       birthday,
       avatar,
-      allergies: [],
-      notes: "Curious, collaborative, and imaginative.",
+      allergies,
+      notes: index === 0 ? "Loves music, puzzles, and helping friends." : "Enjoys sensory play and story time.",
       attendanceStatus,
-      checkedInAt: attendanceStatus === "present" ? ago(180) : void 0,
-      checkedOutAt: attendanceStatus === "went_home" ? ago(45) : void 0,
-      authorizedPickup: [`${firstName}'s guardian`]
-    }))
-  );
+      checkedInAt: attendanceStatus === "present" ? ago(210 - index * 6) : void 0,
+      checkedOutAt: attendanceStatus === "went_home" ? ago(24) : void 0,
+      authorizedPickup: index === 0 ? ["Alex Morgan", "Dana Morgan (Grandmother)"] : [guardianNames[index] ?? `${firstName}'s guardian`],
+      enrolledOn: ahead(-(6 + index * 21)),
+      guardianName: guardianNames[index],
+      guardianPhone: `(614) 555-02${(10 + index).toString()}`,
+      medical: medicalFor(index, allergies)
+    };
+  });
   const activities = [
     { id: "activity-1", centerId: center.id, classroomId: "room-sunbeams", childIds: ["child-1", "child-2", "child-3"], authorId: "user-teacher", authorName: "Jordan Ellis", type: "moment", title: "Garden explorers", body: "Tiny hands, huge discoveries. We found a ladybug and counted all seven spots together.", mediaUrl: "/garden-moment.svg", createdAt: ago(38), likedBy: ["user-parent"] },
     { id: "activity-2", centerId: center.id, classroomId: "room-sunbeams", childIds: ["child-1"], authorId: "user-teacher", authorName: "Jordan Ellis", type: "meal", title: "Lunch", body: "Mia enjoyed veggie pasta, strawberries, and milk.", value: "Ate all", createdAt: ago(84), likedBy: [] },
     { id: "activity-3", centerId: center.id, classroomId: "room-sunbeams", childIds: ["child-1"], authorId: "user-teacher-2", authorName: "Sofia Martinez", type: "nap", title: "Rest time", body: "A peaceful reset after a busy morning.", value: "1h 12m", createdAt: ago(142), likedBy: [] },
     { id: "activity-4", centerId: center.id, classroomId: "room-sunbeams", childIds: ["child-1", "child-2", "child-4"], authorId: "user-teacher", authorName: "Jordan Ellis", type: "learning", title: "Colors in motion", body: "We mixed primary colors with ice cubes and predicted what would happen.", value: "Creative science", createdAt: ago(198), likedBy: ["user-parent"] },
-    { id: "activity-5", centerId: center.id, classroomId: "room-sunbeams", childIds: ["child-1"], authorId: "user-teacher", authorName: "Jordan Ellis", type: "note", title: "Bright start", body: "Mia arrived smiling and jumped right into the welcome puzzle.", createdAt: ago(228), likedBy: [] }
+    { id: "activity-5", centerId: center.id, classroomId: "room-sunbeams", childIds: ["child-1"], authorId: "user-teacher", authorName: "Jordan Ellis", type: "note", title: "Bright start", body: "Mia arrived smiling and jumped right into the welcome puzzle.", createdAt: ago(228), likedBy: [] },
+    { id: "activity-6", centerId: center.id, classroomId: "room-meadow", childIds: ["child-9", "child-10", "child-13"], authorId: "user-teacher-3", authorName: "Amara Wilson", type: "learning", title: "Lesson plan added", body: "Meadow Makers \u2014 measurement week, block city challenge.", value: "STEM", createdAt: ago(110), likedBy: [] },
+    { id: "activity-7", centerId: center.id, classroomId: "room-nest", childIds: ["child-15", "child-16"], authorId: "user-teacher-4", authorName: "Lisa Parker", type: "moment", title: "Emma checked in", body: "Happy waves at drop-off and straight to the soft blocks.", createdAt: ago(255), likedBy: [] }
   ];
   const messages = [
     { id: "message-1", centerId: center.id, childId: "child-1", senderId: "user-teacher", recipientIds: ["user-parent"], body: "Mia had such a joyful morning. She volunteered to help set the lunch table!", createdAt: ago(52), readBy: ["user-teacher"] },
-    { id: "message-2", centerId: center.id, childId: "child-1", senderId: "user-parent", recipientIds: ["user-teacher", "user-teacher-2"], body: "That makes me so happy. Thank you for sharing!", createdAt: ago(43), readBy: ["user-parent", "user-teacher"] }
+    { id: "message-2", centerId: center.id, childId: "child-1", senderId: "user-parent", recipientIds: ["user-teacher", "user-teacher-2"], body: "That makes me so happy. Thank you for sharing!", createdAt: ago(43), readBy: ["user-parent", "user-teacher"] },
+    { id: "message-3", centerId: center.id, childId: "child-2", senderId: "user-parent-2", recipientIds: ["user-teacher", "user-teacher-2"], body: "Arlo will be picked up by his aunt today \u2014 she is on the authorized list.", createdAt: ago(95), readBy: ["user-parent-2"] }
   ];
   const invoices = [
     { id: "invoice-1", centerId: center.id, guardianId: "user-parent", childId: "child-1", amount: 124e3, dueDate: ahead(5), status: "due", description: "July tuition" },
-    { id: "invoice-2", centerId: center.id, guardianId: "user-parent", childId: "child-1", amount: 119500, dueDate: ahead(-25), status: "paid", description: "June tuition" },
-    { id: "invoice-3", centerId: center.id, guardianId: "user-parent-2", childId: "child-2", amount: 124e3, dueDate: ahead(-2), status: "overdue", description: "July tuition" }
+    { id: "invoice-2", centerId: center.id, guardianId: "user-parent", childId: "child-1", amount: 119500, dueDate: ahead(-25), status: "paid", description: "June tuition", paidAt: ago(36e3), method: "Auto-pay card" },
+    { id: "invoice-3", centerId: center.id, guardianId: "user-parent-2", childId: "child-2", amount: 124e3, dueDate: ahead(-2), status: "overdue", description: "July tuition" },
+    { id: "invoice-4", centerId: center.id, guardianId: "user-parent-2", childId: "child-2", amount: 119500, dueDate: ahead(-27), status: "paid", description: "June tuition", paidAt: ago(38500), method: "ACH transfer" },
+    { id: "invoice-5", centerId: center.id, guardianId: "user-parent", childId: "child-1", amount: 4500, dueDate: ahead(9), status: "due", description: "Field trip fee \u2014 Zoo Adventure" }
   ];
   const curriculum = [
-    { id: "curriculum-1", centerId: center.id, classroomId: "room-sunbeams", date: (/* @__PURE__ */ new Date()).toISOString().slice(0, 10), theme: "Little Garden, Big Ideas", goal: "Notice patterns in nature and practice describing discoveries with words, colors, and numbers.", materials: ["Magnifying glasses", "Leaf trays", "Washable paint", "Garden picture cards"], schedule: [
+    { id: "curriculum-1", centerId: center.id, classroomId: "room-sunbeams", date: today(), theme: "Little Garden, Big Ideas", goal: "Notice patterns in nature and practice describing discoveries with words, colors, and numbers.", materials: ["Magnifying glasses", "Leaf trays", "Washable paint", "Garden picture cards"], schedule: [
       { time: "8:30", title: "Welcome & wonder wall", detail: "Share one thing we noticed outside." },
       { time: "9:30", title: "Garden investigation", detail: "Small-group sensory stations." },
       { time: "11:00", title: "Color mixing lab", detail: "Predict, mix, and describe." },
       { time: "2:30", title: "Story garden", detail: "Create a shared garden story." }
-    ], documents: [{ name: "Garden exploration guide", type: "PDF", size: "1.8 MB" }, { name: "Family connection note", type: "DOC", size: "420 KB" }] }
+    ] },
+    { id: "curriculum-2", centerId: center.id, classroomId: "room-meadow", date: today(), theme: "Build It, Measure It", goal: "Compare heights and lengths with blocks, tape measures, and teamwork.", materials: ["Unit blocks", "Measuring tapes", "Grid paper", "Clipboards"], schedule: [
+      { time: "8:45", title: "Morning meeting", detail: "Guess the tallest tower." },
+      { time: "9:45", title: "Block city challenge", detail: "Small teams plan and build." },
+      { time: "11:15", title: "Measure & record", detail: "Chart our structures." },
+      { time: "2:45", title: "Architect share-out", detail: "Present what we built." }
+    ] },
+    { id: "curriculum-3", centerId: center.id, classroomId: "room-nest", date: today(), theme: "Textures & Tunes", goal: "Explore textures with safe sensory baskets and respond to gentle rhythm games.", materials: ["Texture baskets", "Scarves", "Shakers", "Board books"], schedule: [
+      { time: "9:00", title: "Cuddle & sing", detail: "Welcome songs with movement." },
+      { time: "10:00", title: "Texture baskets", detail: "Supervised sensory exploration." },
+      { time: "11:30", title: "Lunch & lull", detail: "Calm music into rest time." }
+    ] }
   ];
-  return { center, users, classrooms, children, activities, messages, invoices, curriculum };
+  const enrollments = [
+    { id: "enrollment-1", centerId: center.id, childName: "Harper Bell", birthday: "2023-04-11", guardianName: "Jamie Bell", guardianEmail: "jamie.bell@example.com", guardianPhone: "(614) 555-0301", classroomId: "room-sunbeams", requestedStart: ahead(21), status: "approved", notes: "Tour completed. Paperwork returned \u2014 ready to enroll.", submittedAt: ago(12e3) },
+    { id: "enrollment-2", centerId: center.id, childName: "Mateo Cruz", birthday: "2021-12-02", guardianName: "Ana Cruz", guardianEmail: "ana.cruz@example.com", guardianPhone: "(614) 555-0302", classroomId: "room-meadow", requestedStart: ahead(35), status: "toured", notes: "Family visited Tuesday. Comparing two centers.", submittedAt: ago(20500) },
+    { id: "enrollment-3", centerId: center.id, childName: "Willow James", birthday: "2024-09-27", guardianName: "Morgan James", guardianEmail: "morgan.james@example.com", guardianPhone: "(614) 555-0303", classroomId: "room-nest", requestedStart: ahead(14), status: "waitlist", notes: "Infant room at ratio \u2014 first on waitlist.", submittedAt: ago(3e4) },
+    { id: "enrollment-4", centerId: center.id, childName: "Finn OConnor", birthday: "2022-07-19", guardianName: "Casey OConnor", guardianEmail: "casey.oconnor@example.com", guardianPhone: "(614) 555-0304", classroomId: "room-meadow", requestedStart: ahead(45), status: "inquiry", notes: "Found us through the parent fair. Wants a tour next week.", submittedAt: ago(3100) }
+  ];
+  const events = [
+    { id: "event-1", centerId: center.id, title: "Field Trip \u2014 Zoo Adventure", date: ahead(6), time: "9:00 AM \u2013 1:00 PM", detail: "Meadow Makers visit the Columbus Zoo.", attendees: 28 },
+    { id: "event-2", centerId: center.id, title: "Monthly Parent Meeting", date: ahead(8), time: "6:00 PM \u2013 7:30 PM", detail: "Summer program preview and Q&A.", attendees: 15 },
+    { id: "event-3", centerId: center.id, title: "School Closed \u2014 Staff In-Service", date: ahead(11), detail: "Professional development day for all staff." },
+    { id: "event-4", centerId: center.id, title: "Progress Reports Shared", date: ahead(15), detail: "July progress reports available to parents." }
+  ];
+  const history = pastWeekdays(5);
+  const attendanceLog = [];
+  history.forEach((date, dayIndex) => {
+    children.forEach((child, childIndex) => {
+      const absent = (childIndex + dayIndex * 3) % 7 === 5;
+      attendanceLog.push({
+        id: `attendance-${date}-${child.id}`,
+        centerId: center.id,
+        childId: child.id,
+        date,
+        status: absent ? "absent" : "present",
+        checkedInAt: absent ? void 0 : `${date}T${dayIndex % 2 ? "08" : "07"}:${(35 + childIndex).toString().padStart(2, "0")}:00.000Z`,
+        checkedOutAt: absent ? void 0 : `${date}T16:${(10 + childIndex).toString().padStart(2, "0")}:00.000Z`
+      });
+    });
+  });
+  children.forEach((child) => {
+    if (child.attendanceStatus === "expected") return;
+    attendanceLog.push({ id: `attendance-${today()}-${child.id}`, centerId: center.id, childId: child.id, date: today(), status: "present", checkedInAt: child.checkedInAt, checkedOutAt: child.checkedOutAt });
+  });
+  const meals = [];
+  history.forEach((date, dayIndex) => {
+    const present = attendanceLog.filter((entry) => entry.date === date && entry.status === "present").length;
+    ["breakfast", "lunch", "snack"].forEach((meal, mealIndex) => {
+      meals.push({ id: `meal-${date}-${meal}`, centerId: center.id, date, meal, childCount: Math.max(present - mealIndex - dayIndex % 2, 0), adultCount: 4, recordedBy: "Jordan Ellis" });
+    });
+  });
+  const presentToday = children.filter((child) => child.attendanceStatus !== "expected").length;
+  meals.push(
+    { id: `meal-${today()}-breakfast`, centerId: center.id, date: today(), meal: "breakfast", childCount: Math.max(presentToday - 2, 0), adultCount: 4, recordedBy: "Jordan Ellis" },
+    { id: `meal-${today()}-lunch`, centerId: center.id, date: today(), meal: "lunch", childCount: presentToday, adultCount: 5, recordedBy: "Sofia Martinez" }
+  );
+  const monthKey = (offset) => {
+    const date = /* @__PURE__ */ new Date();
+    date.setMonth(date.getMonth() + offset);
+    return date.toISOString().slice(0, 7);
+  };
+  const cacfpClaims = [
+    { id: "claim-current", centerId: center.id, month: monthKey(0), status: "draft", amount: 0, daysSubmitted: history.length + 1, daysInMonth: 22 },
+    { id: "claim-previous", centerId: center.id, month: monthKey(-1), status: "approved", amount: 412560, daysSubmitted: 22, daysInMonth: 22 },
+    { id: "claim-older", centerId: center.id, month: monthKey(-2), status: "paid", amount: 398410, daysSubmitted: 21, daysInMonth: 21 }
+  ];
+  const documents = [
+    { id: "document-1", centerId: center.id, name: "Daily attendance sheet (blank).pdf", category: "attendance", contentType: "application/pdf", size: 1180, uploadedBy: "Sarah Johnson", uploadedAt: ago(14e3), dataUrl: tinyPdf("Daily Attendance Sheet", ["Bright Path Learning Center", "Date: ____________  Classroom: ____________", "", "Child name          Time in    Time out    Guardian signature", "________________    ______     _______     __________________", "________________    ______     _______     __________________", "________________    ______     _______     __________________"]) },
+    { id: "document-2", centerId: center.id, name: "Immunization record form.pdf", category: "medical", contentType: "application/pdf", size: 1120, uploadedBy: "Sarah Johnson", uploadedAt: ago(26e3), dataUrl: tinyPdf("Immunization Record", ["Bright Path Learning Center", "Child: ____________________  DOB: ____________", "", "Vaccine        Dose 1      Dose 2      Dose 3", "DTaP           ______      ______      ______", "MMR            ______      ______      ______", "Varicella      ______      ______      ______"]) },
+    { id: "document-3", centerId: center.id, name: "CACFP claim worksheet.pdf", category: "financial", contentType: "application/pdf", size: 1050, uploadedBy: "Sarah Johnson", uploadedAt: ago(4e4), dataUrl: tinyPdf("CACFP Monthly Claim Worksheet", ["Bright Path Learning Center", "Claim month: ____________", "", "Meal type      Days served    Total meals", "Breakfast      ___________    ___________", "Lunch          ___________    ___________", "Snack          ___________    ___________"]) },
+    { id: "document-4", centerId: center.id, name: "Enrollment packet.pdf", category: "enrollment", contentType: "application/pdf", size: 1240, uploadedBy: "Sarah Johnson", uploadedAt: ago(55e3), dataUrl: tinyPdf("Enrollment Packet", ["Bright Path Learning Center", "Welcome! Please complete and return:", "", "1. Child information & emergency contacts", "2. Immunization records", "3. Authorized pickup list", "4. Tuition agreement"]) },
+    { id: "document-5", centerId: center.id, name: "Fire drill log.pdf", category: "licensing", contentType: "application/pdf", size: 990, uploadedBy: "Sarah Johnson", uploadedAt: ago(7e4), dataUrl: tinyPdf("Fire Drill Log", ["Bright Path Learning Center \u2014 License OH-ELC-28491", "", "Date         Time       Evacuation time    Conducted by", "_________    ______     _____________      ____________", "_________    ______     _____________      ____________"]) },
+    { id: "document-6", centerId: center.id, name: "Garden exploration guide.pdf", category: "curriculum", contentType: "application/pdf", size: 1310, uploadedBy: "Jordan Ellis", uploadedAt: ago(9e3), dataUrl: tinyPdf("Garden Exploration Guide", ["Theme: Little Garden, Big Ideas", "", "Stations: leaf rubbings, seed sorting, watering team", "Vocabulary: sprout, stem, petal, roots", "Family tie-in: send a photo of a plant at home"]) }
+  ];
+  return { center, users, classrooms, children, activities, messages, invoices, curriculum, enrollments, events, meals, cacfpClaims, documents, attendanceLog };
 }
 var current = seed();
 var store = () => current;
@@ -151,11 +290,74 @@ var loginSchema = z.object({ email: z.string().email(), password: z.string().min
 var attendanceSchema = z.object({ status: z.enum(["expected", "present", "went_home"]), signature: z.string().optional() });
 var activitySchema = z.object({ childIds: z.array(z.string()).min(1), type: z.enum(["moment", "meal", "nap", "learning", "note", "incident"]), title: z.string().min(1).max(80), body: z.string().min(1).max(600), value: z.string().max(80).optional(), mediaUrl: z.string().optional() });
 var messageSchema = z.object({ childId: z.string(), body: z.string().min(1).max(1e3) });
+var immunizationSchema = z.object({ name: z.string().min(1).max(60), date: z.string(), status: z.enum(["complete", "due", "overdue"]) });
+var medicalSchema = z.object({
+  physician: z.string().max(80),
+  physicianPhone: z.string().max(30),
+  conditions: z.string().max(400),
+  medications: z.string().max(400),
+  lastPhysical: z.string().max(20),
+  immunizations: z.array(immunizationSchema).max(30),
+  emergencyContacts: z.array(z.object({ name: z.string().min(1).max(80), relation: z.string().max(40), phone: z.string().max(30) })).max(10)
+});
+var childCreateSchema = z.object({
+  firstName: z.string().min(1).max(40),
+  lastName: z.string().min(1).max(40),
+  birthday: z.string().min(4).max(20),
+  classroomId: z.string(),
+  guardianName: z.string().max(80).optional(),
+  guardianPhone: z.string().max(30).optional(),
+  allergies: z.array(z.string().max(40)).max(12).optional(),
+  notes: z.string().max(400).optional(),
+  authorizedPickup: z.array(z.string().max(80)).max(8).optional()
+});
+var childUpdateSchema = z.object({
+  firstName: z.string().min(1).max(40).optional(),
+  lastName: z.string().min(1).max(40).optional(),
+  classroomId: z.string().optional(),
+  guardianName: z.string().max(80).optional(),
+  guardianPhone: z.string().max(30).optional(),
+  allergies: z.array(z.string().max(40)).max(12).optional(),
+  notes: z.string().max(400).optional(),
+  authorizedPickup: z.array(z.string().max(80)).max(8).optional(),
+  medical: medicalSchema.optional()
+});
+var enrollmentCreateSchema = z.object({
+  childName: z.string().min(1).max(80),
+  birthday: z.string().min(4).max(20),
+  guardianName: z.string().min(1).max(80),
+  guardianEmail: z.string().email(),
+  guardianPhone: z.string().max(30),
+  classroomId: z.string(),
+  requestedStart: z.string().max(20),
+  notes: z.string().max(400).optional()
+});
+var enrollmentUpdateSchema = z.object({ status: z.enum(["inquiry", "toured", "waitlist", "approved", "enrolled", "declined"]).optional(), notes: z.string().max(400).optional() });
+var credentialSchema = z.object({ name: z.string().min(1).max(80), issued: z.string().max(20), expires: z.string().max(20) });
+var staffCreateSchema = z.object({ name: z.string().min(1).max(80), email: z.string().email(), title: z.string().max(60).optional(), phone: z.string().max(30).optional(), classroomIds: z.array(z.string()).max(6).optional(), credentials: z.array(credentialSchema).max(12).optional() });
+var staffUpdateSchema = z.object({ title: z.string().max(60).optional(), phone: z.string().max(30).optional(), classroomIds: z.array(z.string()).max(6).optional(), credentials: z.array(credentialSchema).max(12).optional() });
+var mealSchema = z.object({ date: z.string().min(8).max(10), meal: z.enum(["breakfast", "lunch", "snack"]), childCount: z.number().int().min(0).max(500), adultCount: z.number().int().min(0).max(100) });
+var eventSchema = z.object({ title: z.string().min(1).max(120), date: z.string().min(8).max(10), time: z.string().max(40).optional(), detail: z.string().max(300).optional(), attendees: z.number().int().min(0).max(1e3).optional() });
+var documentSchema = z.object({ name: z.string().min(1).max(120), category: z.enum(["attendance", "financial", "medical", "enrollment", "licensing", "curriculum", "other"]), contentType: z.string().min(1).max(100), size: z.number().int().min(0), dataUrl: z.string().startsWith("data:").max(42e5) });
+var centerSchema = z.object({ name: z.string().min(1).max(100).optional(), address: z.string().max(160).optional(), phone: z.string().max(30).optional(), license: z.string().max(40).optional(), capacity: z.number().int().min(1).max(500).optional() });
+var invoiceCreateSchema = z.object({ childId: z.string(), amount: z.number().int().min(1).max(1e7), dueDate: z.string().min(8).max(10), description: z.string().min(1).max(120) });
+var recordPaymentSchema = z.object({ method: z.string().min(1).max(60) });
 var uid = (prefix) => `${prefix}-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
 function inCareOf(user, child) {
   if (user.role === "admin") return true;
   if (user.role === "teacher") return user.classroomIds.includes(child.classroomId);
   return child.guardianIds.includes(user.id);
+}
+function syncTodayAttendanceLog(child) {
+  const log = store().attendanceLog;
+  const index = log.findIndex((entry2) => entry2.date === today() && entry2.childId === child.id);
+  if (child.attendanceStatus === "expected") {
+    if (index >= 0) log.splice(index, 1);
+    return;
+  }
+  const entry = { id: `attendance-${today()}-${child.id}`, centerId: child.centerId, childId: child.id, date: today(), status: "present", checkedInAt: child.checkedInAt, checkedOutAt: child.checkedOutAt };
+  if (index >= 0) log[index] = entry;
+  else log.push(entry);
 }
 function parseBody(schema, body, res) {
   const parsed = schema.safeParse(body);
@@ -179,6 +381,11 @@ function scopedDashboard(user) {
   const staff = user.role === "admin" ? data.users.filter((item) => item.role !== "parent") : data.users.filter((item) => item.role === "teacher" && item.classroomIds.some((id) => roomIds.includes(id)));
   const revenueCollected = invoices.filter((invoice) => invoice.status === "paid").reduce((sum, invoice) => sum + invoice.amount, 0);
   const revenueOutstanding = invoices.filter((invoice) => invoice.status !== "paid").reduce((sum, invoice) => sum + invoice.amount, 0);
+  const enrollments = user.role === "admin" ? data.enrollments : [];
+  const meals = user.role === "parent" ? [] : data.meals;
+  const cacfpClaims = user.role === "admin" ? data.cacfpClaims : [];
+  const documents = user.role === "parent" ? [] : data.documents.map(({ dataUrl: _dataUrl, ...meta }) => meta);
+  const attendanceLog = data.attendanceLog.filter((entry) => visibleChildIds.includes(entry.childId));
   return {
     center: data.center,
     classrooms,
@@ -188,6 +395,12 @@ function scopedDashboard(user) {
     invoices,
     curriculum,
     staff,
+    enrollments,
+    events: data.events,
+    meals,
+    cacfpClaims,
+    documents,
+    attendanceLog,
     stats: {
       present: children.filter((child) => child.attendanceStatus === "present").length,
       expected: children.filter((child) => child.attendanceStatus === "expected").length,
@@ -203,7 +416,7 @@ function scopedDashboard(user) {
 function createApp(broadcast = () => void 0) {
   const app2 = express();
   app2.use(cors({ origin: true, credentials: true }));
-  app2.use(express.json({ limit: "2mb" }));
+  app2.use(express.json({ limit: "6mb" }));
   app2.get("/api/health", (_req, res) => res.json({ status: "ok", service: "Child Care Compass" }));
   app2.post("/api/auth/login", (req, res) => {
     const body = parseBody(loginSchema, req.body, res);
@@ -229,6 +442,7 @@ function createApp(broadcast = () => void 0) {
       child.checkedInAt = void 0;
       child.checkedOutAt = void 0;
     }
+    syncTodayAttendanceLog(child);
     broadcast("attendance:updated", child);
     return res.json(child);
   });
@@ -272,8 +486,214 @@ function createApp(broadcast = () => void 0) {
     const invoice = store().invoices.find((item) => item.id === req.params.invoiceId && item.centerId === req.user.centerId && (req.user.role === "admin" || item.guardianId === req.user.id));
     if (!invoice) return res.status(404).json({ error: "not_found", message: "Invoice not found." });
     invoice.status = "paid";
+    invoice.paidAt = (/* @__PURE__ */ new Date()).toISOString();
+    invoice.method = invoice.method ?? "Card on file";
     broadcast("invoice:updated", invoice);
     return res.json(invoice);
+  });
+  app2.post("/api/invoices", authenticate, allow("admin"), (req, res) => {
+    const body = parseBody(invoiceCreateSchema, req.body, res);
+    if (!body) return;
+    const child = store().children.find((item) => item.id === body.childId && item.centerId === req.user.centerId);
+    if (!child) return res.status(404).json({ error: "not_found", message: "Child not found." });
+    const invoice = { id: uid("invoice"), centerId: req.user.centerId, guardianId: child.guardianIds[0] ?? "", childId: child.id, amount: body.amount, dueDate: body.dueDate, status: "due", description: body.description };
+    store().invoices.push(invoice);
+    broadcast("invoice:updated", invoice);
+    return res.status(201).json(invoice);
+  });
+  app2.post("/api/invoices/:invoiceId/record-payment", authenticate, allow("admin"), (req, res) => {
+    const body = parseBody(recordPaymentSchema, req.body, res);
+    if (!body) return;
+    const invoice = store().invoices.find((item) => item.id === req.params.invoiceId && item.centerId === req.user.centerId);
+    if (!invoice) return res.status(404).json({ error: "not_found", message: "Invoice not found." });
+    invoice.status = "paid";
+    invoice.paidAt = (/* @__PURE__ */ new Date()).toISOString();
+    invoice.method = body.method;
+    broadcast("invoice:updated", invoice);
+    return res.json(invoice);
+  });
+  app2.post("/api/children", authenticate, allow("admin"), (req, res) => {
+    const body = parseBody(childCreateSchema, req.body, res);
+    if (!body) return;
+    const classroom = store().classrooms.find((room) => room.id === body.classroomId && room.centerId === req.user.centerId);
+    if (!classroom) return res.status(404).json({ error: "not_found", message: "Classroom not found." });
+    const child = {
+      id: uid("child"),
+      centerId: req.user.centerId,
+      classroomId: classroom.id,
+      guardianIds: [],
+      firstName: body.firstName,
+      lastName: body.lastName,
+      birthday: body.birthday,
+      avatar: "sky",
+      allergies: body.allergies ?? [],
+      notes: body.notes ?? "New to Bright Path \u2014 getting settled in.",
+      attendanceStatus: "expected",
+      authorizedPickup: body.authorizedPickup?.length ? body.authorizedPickup : [body.guardianName || "Guardian"],
+      enrolledOn: today(),
+      guardianName: body.guardianName,
+      guardianPhone: body.guardianPhone,
+      medical: { physician: "", physicianPhone: "", conditions: body.allergies?.length ? `Allergy: ${body.allergies.join(", ")}` : "None reported", medications: "None", lastPhysical: "", immunizations: [], emergencyContacts: body.guardianName ? [{ name: body.guardianName, relation: "Parent", phone: body.guardianPhone ?? "" }] : [] }
+    };
+    store().children.push(child);
+    broadcast("data:updated", { type: "child", id: child.id });
+    return res.status(201).json(child);
+  });
+  app2.patch("/api/children/:childId", authenticate, allow("admin", "teacher"), (req, res) => {
+    const body = parseBody(childUpdateSchema, req.body, res);
+    if (!body) return;
+    const child = store().children.find((item) => item.id === req.params.childId && item.centerId === req.user.centerId);
+    if (!child || req.user.role === "teacher" && !req.user.classroomIds.includes(child.classroomId)) return res.status(404).json({ error: "not_found", message: "Child not found in your classroom." });
+    if (body.classroomId && !store().classrooms.some((room) => room.id === body.classroomId && room.centerId === req.user.centerId)) return res.status(404).json({ error: "not_found", message: "Classroom not found." });
+    Object.assign(child, body);
+    broadcast("data:updated", { type: "child", id: child.id });
+    return res.json(child);
+  });
+  app2.post("/api/enrollments", authenticate, allow("admin"), (req, res) => {
+    const body = parseBody(enrollmentCreateSchema, req.body, res);
+    if (!body) return;
+    if (!store().classrooms.some((room) => room.id === body.classroomId && room.centerId === req.user.centerId)) return res.status(404).json({ error: "not_found", message: "Classroom not found." });
+    const application = { id: uid("enrollment"), centerId: req.user.centerId, status: "inquiry", submittedAt: (/* @__PURE__ */ new Date()).toISOString(), notes: body.notes ?? "", ...body };
+    store().enrollments.unshift(application);
+    broadcast("data:updated", { type: "enrollment", id: application.id });
+    return res.status(201).json(application);
+  });
+  app2.patch("/api/enrollments/:enrollmentId", authenticate, allow("admin"), (req, res) => {
+    const body = parseBody(enrollmentUpdateSchema, req.body, res);
+    if (!body) return;
+    const application = store().enrollments.find((item) => item.id === req.params.enrollmentId && item.centerId === req.user.centerId);
+    if (!application) return res.status(404).json({ error: "not_found", message: "Application not found." });
+    if (body.notes !== void 0) application.notes = body.notes;
+    if (body.status && body.status !== application.status) {
+      application.status = body.status;
+      if (body.status === "enrolled") {
+        const [firstName, ...rest] = application.childName.split(" ");
+        const child = {
+          id: uid("child"),
+          centerId: req.user.centerId,
+          classroomId: application.classroomId,
+          guardianIds: [],
+          firstName: firstName || application.childName,
+          lastName: rest.join(" ") || "\u2014",
+          birthday: application.birthday,
+          avatar: "mint",
+          allergies: [],
+          notes: "Newly enrolled \u2014 welcome packet in progress.",
+          attendanceStatus: "expected",
+          authorizedPickup: [application.guardianName],
+          enrolledOn: today(),
+          guardianName: application.guardianName,
+          guardianPhone: application.guardianPhone,
+          medical: { physician: "", physicianPhone: "", conditions: "None reported", medications: "None", lastPhysical: "", immunizations: [], emergencyContacts: [{ name: application.guardianName, relation: "Parent", phone: application.guardianPhone }] }
+        };
+        store().children.push(child);
+      }
+    }
+    broadcast("data:updated", { type: "enrollment", id: application.id });
+    return res.json(application);
+  });
+  app2.post("/api/staff", authenticate, allow("admin"), (req, res) => {
+    const body = parseBody(staffCreateSchema, req.body, res);
+    if (!body) return;
+    if (store().users.some((user) => user.email.toLowerCase() === body.email.toLowerCase())) return res.status(409).json({ error: "conflict", message: "A team member with that email already exists." });
+    const member = {
+      id: uid("user"),
+      centerId: req.user.centerId,
+      name: body.name,
+      email: body.email,
+      role: "teacher",
+      avatar: body.name.split(" ").map((part) => part[0]).slice(0, 2).join("").toUpperCase(),
+      classroomIds: body.classroomIds ?? [],
+      childIds: [],
+      title: body.title ?? "Teacher",
+      phone: body.phone,
+      hiredOn: today(),
+      credentials: body.credentials ?? []
+    };
+    store().users.push(member);
+    member.classroomIds.forEach((roomId) => {
+      const room = store().classrooms.find((item) => item.id === roomId);
+      if (room && !room.teacherIds.includes(member.id)) room.teacherIds.push(member.id);
+    });
+    broadcast("data:updated", { type: "staff", id: member.id });
+    return res.status(201).json(member);
+  });
+  app2.patch("/api/staff/:staffId", authenticate, allow("admin"), (req, res) => {
+    const body = parseBody(staffUpdateSchema, req.body, res);
+    if (!body) return;
+    const member = store().users.find((user) => user.id === req.params.staffId && user.centerId === req.user.centerId && user.role !== "parent");
+    if (!member) return res.status(404).json({ error: "not_found", message: "Team member not found." });
+    if (body.classroomIds) {
+      store().classrooms.forEach((room) => {
+        room.teacherIds = room.teacherIds.filter((id) => id !== member.id);
+        if (body.classroomIds.includes(room.id)) room.teacherIds.push(member.id);
+      });
+      member.classroomIds = body.classroomIds;
+    }
+    if (body.title !== void 0) member.title = body.title;
+    if (body.phone !== void 0) member.phone = body.phone;
+    if (body.credentials !== void 0) member.credentials = body.credentials;
+    broadcast("data:updated", { type: "staff", id: member.id });
+    return res.json(member);
+  });
+  app2.post("/api/meals", authenticate, allow("admin", "teacher"), (req, res) => {
+    const body = parseBody(mealSchema, req.body, res);
+    if (!body) return;
+    const meals = store().meals;
+    const existing = meals.find((record2) => record2.date === body.date && record2.meal === body.meal && record2.centerId === req.user.centerId);
+    const record = { id: existing?.id ?? uid("meal"), centerId: req.user.centerId, date: body.date, meal: body.meal, childCount: body.childCount, adultCount: body.adultCount, recordedBy: req.user.name };
+    if (existing) Object.assign(existing, record);
+    else meals.push(record);
+    broadcast("data:updated", { type: "meal", id: record.id });
+    return res.status(existing ? 200 : 201).json(record);
+  });
+  app2.post("/api/events", authenticate, allow("admin"), (req, res) => {
+    const body = parseBody(eventSchema, req.body, res);
+    if (!body) return;
+    const event = { id: uid("event"), centerId: req.user.centerId, ...body };
+    store().events.push(event);
+    store().events.sort((a, b) => a.date.localeCompare(b.date));
+    broadcast("data:updated", { type: "event", id: event.id });
+    return res.status(201).json(event);
+  });
+  app2.delete("/api/events/:eventId", authenticate, allow("admin"), (req, res) => {
+    const events = store().events;
+    const index = events.findIndex((event) => event.id === req.params.eventId && event.centerId === req.user.centerId);
+    if (index < 0) return res.status(404).json({ error: "not_found", message: "Event not found." });
+    const [removed] = events.splice(index, 1);
+    broadcast("data:updated", { type: "event", id: removed.id });
+    return res.json(removed);
+  });
+  app2.post("/api/documents", authenticate, allow("admin", "teacher"), (req, res) => {
+    const body = parseBody(documentSchema, req.body, res);
+    if (!body) return;
+    const document = { id: uid("document"), centerId: req.user.centerId, uploadedBy: req.user.name, uploadedAt: (/* @__PURE__ */ new Date()).toISOString(), ...body };
+    store().documents.unshift(document);
+    broadcast("data:updated", { type: "document", id: document.id });
+    const { dataUrl: _dataUrl, ...meta } = document;
+    return res.status(201).json(meta);
+  });
+  app2.get("/api/documents/:documentId", authenticate, allow("admin", "teacher"), (req, res) => {
+    const document = store().documents.find((item) => item.id === req.params.documentId && item.centerId === req.user.centerId);
+    if (!document) return res.status(404).json({ error: "not_found", message: "Document not found." });
+    return res.json(document);
+  });
+  app2.delete("/api/documents/:documentId", authenticate, allow("admin", "teacher"), (req, res) => {
+    const documents = store().documents;
+    const index = documents.findIndex((item) => item.id === req.params.documentId && item.centerId === req.user.centerId);
+    if (index < 0) return res.status(404).json({ error: "not_found", message: "Document not found." });
+    if (req.user.role === "teacher" && documents[index].uploadedBy !== req.user.name) return res.status(403).json({ error: "forbidden", message: "Teachers can only remove documents they uploaded." });
+    const [removed] = documents.splice(index, 1);
+    broadcast("data:updated", { type: "document", id: removed.id });
+    const { dataUrl: _dataUrl, ...meta } = removed;
+    return res.json(meta);
+  });
+  app2.patch("/api/center", authenticate, allow("admin"), (req, res) => {
+    const body = parseBody(centerSchema, req.body, res);
+    if (!body) return;
+    Object.assign(store().center, body);
+    broadcast("data:updated", { type: "center", id: store().center.id });
+    return res.json(store().center);
   });
   app2.use("/api", (_req, res) => res.status(404).json({ error: "not_found", message: "That route does not exist." }));
   app2.use((error, _req, res, _next) => {

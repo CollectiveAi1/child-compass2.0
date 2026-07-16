@@ -1,11 +1,13 @@
-import { FormEvent, useMemo, useState } from 'react';
+import { FormEvent, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { BookOpen, Camera, Check, ChevronRight, ClipboardCheck, Clock3, Coffee, FileText, LayoutDashboard, MessageCircle, Moon, MoreHorizontal, Plus, Send, Sparkles, Utensils, Users } from 'lucide-react';
-import type { ActivityType, AttendanceStatus, Child } from '@compass/shared';
+import { BookOpen, Camera, Check, ChevronRight, ClipboardCheck, Clock3, Coffee, Download, FileText, LayoutDashboard, MessageCircle, Moon, MoreHorizontal, Plus, Send, Sparkles, Upload, Utensils, Users } from 'lucide-react';
+import type { ActivityType, AttendanceStatus, Child, DashboardData } from '@compass/shared';
 import { nextAttendanceStatus } from '@compass/shared';
 import { AppShell } from '../components/AppShell';
 import { Avatar, Button, ErrorScreen, IconButton, LoadingScreen, Modal, spring } from '../components/ui';
-import { useActivity, useAttendance, useDashboard, useMessage } from '../hooks/useCompass';
+import { useActivity, useAttendance, useDashboard, useMessage, useUploadDocument } from '../hooks/useCompass';
+import { getDocumentFile } from '../lib/api';
+import { formatBytes, readFileAsDataUrl, triggerDownload } from '../lib/reports';
 import { firstName } from '../lib/format';
 import { useSession } from '../lib/session';
 
@@ -32,6 +34,39 @@ function chime() {
       oscillator.frequency.value = frequency; gain.gain.setValueAtTime(0, context.currentTime + index * .07); gain.gain.linearRampToValueAtTime(.08, context.currentTime + index * .07 + .02); gain.gain.exponentialRampToValueAtTime(.001, context.currentTime + index * .07 + .28); oscillator.start(context.currentTime + index * .07); oscillator.stop(context.currentTime + index * .07 + .3);
     });
   } catch { /* Audio is an enhancement. */ }
+}
+
+// Real shared files from the center's document vault — teachers can download
+// any resource and upload their own for the rest of the team.
+function TeacherDocuments({ data }: { data: DashboardData }) {
+  const token = useSession(state => state.token)!;
+  const upload = useUploadDocument();
+  const [error, setError] = useState('');
+  const fileInput = useRef<HTMLInputElement>(null);
+  const documents = data.documents.filter(document => document.category === 'curriculum');
+  const download = async (documentId: string, name: string) => {
+    const file = await getDocumentFile(documentId, token);
+    triggerDownload(file.dataUrl, name);
+  };
+  const handleUpload = async (file: File) => {
+    setError('');
+    if (file.size > 3 * 1024 * 1024) { setError('Files up to 3 MB are supported.'); return; }
+    try {
+      const dataUrl = await readFileAsDataUrl(file);
+      await upload.mutateAsync({ name: file.name, category: 'curriculum', contentType: file.type || 'application/octet-stream', size: file.size, dataUrl });
+    } catch (uploadError) { setError(uploadError instanceof Error ? uploadError.message : 'Upload failed.'); }
+  };
+  return <article className="panel documents-card">
+    <p className="eyebrow">Teacher resources</p>
+    <header><h2>Documents</h2><Button className="button-teal button-compact" disabled={upload.isPending} onClick={() => fileInput.current?.click()}><Upload size={14}/> {upload.isPending ? 'Uploading…' : 'Upload'}</Button></header>
+    <input ref={fileInput} type="file" hidden aria-label="Upload teaching resource" onChange={event => { const file = event.target.files?.[0]; if (file) void handleUpload(file); event.target.value = ''; }}/>
+    {error ? <p className="form-error">{error}</p> : null}
+    {documents.length ? documents.map(document => <div className="document-row" key={document.id}>
+      <span className="doc-icon"><FileText/></span>
+      <div><b>{document.name}</b><small>{formatBytes(document.size)} · {document.uploadedBy}</small></div>
+      <Button className="button-soft button-compact" aria-label={`Download ${document.name}`} onClick={() => void download(document.id, document.name)}><Download size={14}/></Button>
+    </div>) : <p className="empty-note">No shared resources yet — upload the first one.</p>}
+  </article>;
 }
 
 function ChildCard({ child, onMove, busy }: { child: Child; onMove: (child: Child) => void; busy: boolean }) {
@@ -81,7 +116,7 @@ export function TeacherPortal() {
 
       {active === 'attendance' ? <section className="attendance-page"><div className="section-heading"><div><p className="eyebrow">Drag-free, one-hand workflow</p><h2>Attendance Kanban</h2><p>Tap a child card to move them to the next stage.</p></div><div className="ratio-large"><small>Live ratio</small><b>1:{ratio}</b><span>Safe</span></div></div><div className="kanban-board">{(['expected', 'present', 'went_home'] as AttendanceStatus[]).map(status => <section className={`kanban-column kanban-${status}`} key={status}><header><span>{status === 'expected' ? <Clock3/> : status === 'present' ? <Check/> : <Coffee/>}</span><div><h3>{status === 'expected' ? 'Arriving' : status === 'present' ? 'Checked in' : 'Went home'}</h3><p>{columns[status].length} {columns[status].length === 1 ? 'child' : 'children'}</p></div></header><div>{columns[status].map(child => <ChildCard key={child.id} child={child} onMove={move} busy={attendance.isPending}/>)}</div></section>)}</div></section> : null}
 
-      {active === 'curriculum' ? <section className="curriculum-page"><div className="curriculum-hero"><div><p className="eyebrow">Today’s curriculum</p><h1>{data.curriculum[0]?.theme}</h1><p>{data.curriculum[0]?.goal}</p></div><span className="hero-flower">✿</span></div><div className="curriculum-grid"><article className="panel"><p className="eyebrow">Materials basket</p><h2>Gather these</h2><ul className="material-list">{data.curriculum[0]?.materials.map(item => <li key={item}><Check/>{item}</li>)}</ul></article><article className="panel"><p className="eyebrow">Day rhythm</p><h2>Learning plan</h2><div className="schedule-full">{data.curriculum[0]?.schedule.map(item => <div key={item.time}><time>{item.time}</time><i/><span><b>{item.title}</b><p>{item.detail}</p></span></div>)}</div></article><article className="panel documents-card"><p className="eyebrow">Teacher resources</p><h2>Documents</h2>{data.curriculum[0]?.documents.map(doc => <button key={doc.name}><span><FileText/></span><div><b>{doc.name}</b><small>{doc.type} · {doc.size}</small></div><ChevronRight/></button>)}</article></div></section> : null}
+      {active === 'curriculum' ? <section className="curriculum-page"><div className="curriculum-hero"><div><p className="eyebrow">Today’s curriculum</p><h1>{data.curriculum[0]?.theme}</h1><p>{data.curriculum[0]?.goal}</p></div><span className="hero-flower">✿</span></div><div className="curriculum-grid"><article className="panel"><p className="eyebrow">Materials basket</p><h2>Gather these</h2><ul className="material-list">{data.curriculum[0]?.materials.map(item => <li key={item}><Check/>{item}</li>)}</ul></article><article className="panel"><p className="eyebrow">Day rhythm</p><h2>Learning plan</h2><div className="schedule-full">{data.curriculum[0]?.schedule.map(item => <div key={item.time}><time>{item.time}</time><i/><span><b>{item.title}</b><p>{item.detail}</p></span></div>)}</div></article><TeacherDocuments data={data}/></div></section> : null}
 
       {active === 'messages' ? <section className="messages-page panel"><aside><p className="eyebrow">Family inbox</p><h2>Conversations</h2>{conversations.map(child => { const last = data.messages.filter(item => item.childId === child.id).at(-1); const unread = unreadFor(child.id); return <button key={child.id} className={child.id === activeChild?.id ? 'active' : ''} onClick={() => setConversationId(child.id)}><Avatar label={`${child.firstName} ${child.lastName}`} tone={child.avatar}/><span><b>{child.firstName}’s family</b><small>{last ? last.body : 'Start the conversation'}</small></span>{unread ? <i>{unread}</i> : null}</button>; })}</aside>{activeChild ? <main><header><Avatar label={`${activeChild.firstName} ${activeChild.lastName}`} tone={activeChild.avatar}/><div><b>{activeChild.firstName}’s family</b><small>Parents & guardians of {activeChild.firstName}</small></div></header><div className="chat-thread">{thread.map(item => <div key={item.id} className={item.senderId === user.id ? 'mine' : ''}><span>{item.body}</span><time>{new Date(item.createdAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</time></div>)}</div><form onSubmit={async event => { event.preventDefault(); if (!message.trim()) return; await send.mutateAsync({ childId: activeChild.id, body: message }); setMessage(''); }}><button type="button" aria-label="Attach"><Plus/></button><input value={message} onChange={event => setMessage(event.target.value)} placeholder="Write a warm update…"/><Button className="button-primary" disabled={!message.trim()}><Send/></Button></form></main> : null}</section> : null}
     </main>

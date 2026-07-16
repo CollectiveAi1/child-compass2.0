@@ -1,4 +1,4 @@
-import type { DashboardData, Role, User } from '@compass/shared';
+import type { CenterDocumentFile, DashboardData, Role, User } from '@compass/shared';
 
 // Same-origin by default (web + Vercel). Native mobile/desktop shells bake in the
 // deployed API origin at build time via VITE_API_URL.
@@ -21,5 +21,6 @@ export async function api<T>(path: string, options: RequestInit = {}, token?: st
 export interface LoginResponse { token: string; user: User }
 export const login = (email: string, password: string) => api<LoginResponse>('/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) });
 export const getDashboard = (token: string) => api<DashboardData>('/dashboard', {}, token);
+export const getDocumentFile = (documentId: string, token: string) => api<CenterDocumentFile>(`/documents/${documentId}`, {}, token);
 
 export const roleLabel: Record<Role, string> = { admin: 'Center Director', teacher: 'Classroom Teacher', parent: 'Parent & Guardian' };
