@@ -2,6 +2,12 @@ export type Role = 'admin' | 'teacher' | 'parent';
 export type AttendanceStatus = 'expected' | 'present' | 'went_home';
 export type ActivityType = 'moment' | 'meal' | 'nap' | 'learning' | 'note' | 'incident';
 
+export interface StaffCredential {
+  name: string;
+  issued: string;
+  expires: string;
+}
+
 export interface User {
   id: string;
   centerId: string;
@@ -11,6 +17,10 @@ export interface User {
   avatar: string;
   classroomIds: string[];
   childIds: string[];
+  title?: string;
+  phone?: string;
+  hiredOn?: string;
+  credentials?: StaffCredential[];
 }
 
 export interface Center {
@@ -33,6 +43,28 @@ export interface Classroom {
   teacherIds: string[];
 }
 
+export interface ImmunizationRecord {
+  name: string;
+  date: string;
+  status: 'complete' | 'due' | 'overdue';
+}
+
+export interface EmergencyContact {
+  name: string;
+  relation: string;
+  phone: string;
+}
+
+export interface ChildMedical {
+  physician: string;
+  physicianPhone: string;
+  conditions: string;
+  medications: string;
+  lastPhysical: string;
+  immunizations: ImmunizationRecord[];
+  emergencyContacts: EmergencyContact[];
+}
+
 export interface Child {
   id: string;
   centerId: string;
@@ -48,6 +80,10 @@ export interface Child {
   checkedInAt?: string;
   checkedOutAt?: string;
   authorizedPickup: string[];
+  enrolledOn?: string;
+  guardianName?: string;
+  guardianPhone?: string;
+  medical?: ChildMedical;
 }
 
 export interface Activity {
@@ -86,6 +122,86 @@ export interface Invoice {
   dueDate: string;
   status: 'paid' | 'due' | 'overdue';
   description: string;
+  paidAt?: string;
+  method?: string;
+}
+
+export type EnrollmentStatus = 'inquiry' | 'toured' | 'waitlist' | 'approved' | 'enrolled' | 'declined';
+
+export interface EnrollmentApplication {
+  id: string;
+  centerId: string;
+  childName: string;
+  birthday: string;
+  guardianName: string;
+  guardianEmail: string;
+  guardianPhone: string;
+  classroomId: string;
+  requestedStart: string;
+  status: EnrollmentStatus;
+  notes: string;
+  submittedAt: string;
+}
+
+export type MealType = 'breakfast' | 'lunch' | 'snack';
+
+export interface MealRecord {
+  id: string;
+  centerId: string;
+  date: string;
+  meal: MealType;
+  childCount: number;
+  adultCount: number;
+  recordedBy: string;
+}
+
+export interface CacfpClaim {
+  id: string;
+  centerId: string;
+  month: string;
+  status: 'draft' | 'submitted' | 'approved' | 'paid';
+  amount: number;
+  daysSubmitted: number;
+  daysInMonth: number;
+}
+
+export type DocumentCategory = 'attendance' | 'financial' | 'medical' | 'enrollment' | 'licensing' | 'curriculum' | 'other';
+
+export const DOCUMENT_CATEGORIES: DocumentCategory[] = ['attendance', 'financial', 'medical', 'enrollment', 'licensing', 'curriculum', 'other'];
+
+export interface CenterDocument {
+  id: string;
+  centerId: string;
+  name: string;
+  category: DocumentCategory;
+  contentType: string;
+  size: number;
+  uploadedBy: string;
+  uploadedAt: string;
+}
+
+export interface CenterDocumentFile extends CenterDocument {
+  dataUrl: string;
+}
+
+export interface CenterEvent {
+  id: string;
+  centerId: string;
+  title: string;
+  date: string;
+  time?: string;
+  detail?: string;
+  attendees?: number;
+}
+
+export interface AttendanceEntry {
+  id: string;
+  centerId: string;
+  childId: string;
+  date: string;
+  status: 'present' | 'absent';
+  checkedInAt?: string;
+  checkedOutAt?: string;
 }
 
 export interface Curriculum {
@@ -97,7 +213,6 @@ export interface Curriculum {
   goal: string;
   materials: string[];
   schedule: { time: string; title: string; detail: string }[];
-  documents: { name: string; type: 'PDF' | 'DOC'; size: string }[];
 }
 
 export interface DashboardData {
@@ -109,6 +224,12 @@ export interface DashboardData {
   invoices: Invoice[];
   curriculum: Curriculum[];
   staff: User[];
+  enrollments: EnrollmentApplication[];
+  events: CenterEvent[];
+  meals: MealRecord[];
+  cacfpClaims: CacfpClaim[];
+  documents: CenterDocument[];
+  attendanceLog: AttendanceEntry[];
   stats: {
     present: number;
     expected: number;
