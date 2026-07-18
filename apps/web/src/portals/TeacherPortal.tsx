@@ -10,6 +10,7 @@ import { getDocumentFile } from '../lib/api';
 import { formatBytes, readFileAsDataUrl, triggerDownload } from '../lib/reports';
 import { firstName } from '../lib/format';
 import { useSession } from '../lib/session';
+import { MOMENT_TOKEN } from '../assets/momentPhoto';
 
 const nav = [
   { id: 'today', label: 'Today', icon: <LayoutDashboard size={19}/> },
@@ -82,7 +83,7 @@ function QuickLog({ children, onClose }: { children: Child[]; onClose: () => voi
   const [body, setBody] = useState('');
   const [value, setValue] = useState('');
   const types: { id: ActivityType; label: string; icon: typeof Camera }[] = [{ id: 'moment', label: 'Moment', icon: Camera }, { id: 'meal', label: 'Meal', icon: Utensils }, { id: 'nap', label: 'Nap', icon: Moon }, { id: 'learning', label: 'Learning', icon: BookOpen }, { id: 'note', label: 'Note', icon: FileText }, { id: 'incident', label: 'Incident', icon: ClipboardCheck }];
-  const submit = async (event: FormEvent) => { event.preventDefault(); await create.mutateAsync({ childIds: selected, type, title, body, value: value || undefined, mediaUrl: type === 'moment' ? '/garden-moment.svg' : undefined }); chime(); onClose(); };
+  const submit = async (event: FormEvent) => { event.preventDefault(); await create.mutateAsync({ childIds: selected, type, title, body, value: value || undefined, mediaUrl: type === 'moment' ? MOMENT_TOKEN : undefined }); chime(); onClose(); };
   return <Modal title="Quick log" eyebrow="Share the day" onClose={onClose} wide><form className="quick-log-form" onSubmit={submit}><div className="quick-type-grid">{types.map(({ id, label, icon: Icon }) => <button type="button" className={type === id ? 'active' : ''} key={id} onClick={() => { setType(id); setTitle(id === 'meal' ? 'Lunch' : id === 'nap' ? 'Rest time' : id === 'learning' ? 'Learning discovery' : id === 'incident' ? 'Incident note' : id === 'note' ? 'Care note' : 'A lovely little moment'); }}><Icon size={21}/><span>{label}</span></button>)}</div><div className="field-group"><label>Tag children</label><div className="child-tag-picker">{children.map(child => <button type="button" key={child.id} className={selected.includes(child.id) ? 'selected' : ''} onClick={() => setSelected(items => items.includes(child.id) ? items.filter(id => id !== child.id) : [...items, child.id])}><Avatar label={`${child.firstName} ${child.lastName}`} tone={child.avatar} size="sm"/><span>{child.firstName}</span>{selected.includes(child.id) ? <Check size={14}/> : null}</button>)}</div></div><div className="form-row"><label>Title<input required value={title} onChange={event => setTitle(event.target.value)}/></label><label>Quick detail<input value={value} onChange={event => setValue(event.target.value)} placeholder={type === 'meal' ? 'Ate all / some' : type === 'nap' ? '1h 20m' : 'Optional'}/></label></div><label>What happened?<textarea required value={body} onChange={event => setBody(event.target.value)} placeholder="Add a warm, useful note for the family…" rows={4}/></label><div className="modal-actions"><Button type="button" className="button-ghost" onClick={onClose}>Cancel</Button><Button className="button-primary" disabled={!selected.length || !body || create.isPending}>{create.isPending ? 'Sharing…' : 'Share update'}<Send size={16}/></Button></div></form></Modal>;
 }
 

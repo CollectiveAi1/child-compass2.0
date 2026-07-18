@@ -4,6 +4,7 @@ import type { ActivityType, DashboardData } from '@compass/shared';
 import { Avatar, Button, Modal } from '../../components/ui';
 import { useActivity } from '../../hooks/useCompass';
 import { fmtTime, roomName, SectionHead } from './common';
+import { MOMENT_TOKEN } from '../../assets/momentPhoto';
 
 const TYPES: { id: ActivityType; label: string; icon: typeof Camera }[] = [
   { id: 'moment', label: 'Moment', icon: Camera }, { id: 'meal', label: 'Meal', icon: Utensils }, { id: 'nap', label: 'Nap', icon: Moon },
@@ -20,7 +21,7 @@ function LogActivityModal({ data, onClose }: { data: DashboardData; onClose: () 
   return <Modal title="Log an activity" eyebrow="Share the day" onClose={onClose} wide>
     <form className="quick-log-form" onSubmit={async event => {
       event.preventDefault();
-      await create.mutateAsync({ childIds: selected, type, title, body, value: value || undefined, mediaUrl: type === 'moment' ? '/garden-moment.svg' : undefined });
+      await create.mutateAsync({ childIds: selected, type, title, body, value: value || undefined, mediaUrl: type === 'moment' ? MOMENT_TOKEN : undefined });
       onClose();
     }}>
       <div className="quick-type-grid">{TYPES.map(({ id, label, icon: Icon }) => <button type="button" className={type === id ? 'active' : ''} key={id} onClick={() => { setType(id); setTitle(id === 'meal' ? 'Lunch' : id === 'nap' ? 'Rest time' : id === 'learning' ? 'Learning discovery' : id === 'incident' ? 'Incident note' : id === 'note' ? 'Care note' : 'A lovely little moment'); }}><Icon size={21}/><span>{label}</span></button>)}</div>
