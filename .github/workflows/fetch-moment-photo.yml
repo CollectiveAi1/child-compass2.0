@@ -1,0 +1,30 @@
+# One-off helper: pulls the link-shared classroom photo from Google Drive on a
+# GitHub runner (which has open egress), optimizes it, and commits it so the
+# development environment can embed it. Removed once the photo is in the repo.
+name: Fetch moment photo
+on: workflow_dispatch
+permissions:
+  contents: write
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download from Google Drive
+        run: |
+          curl -sSL --max-time 120 -o /tmp/raw.img "https://drive.usercontent.google.com/download?id=1aEHxjYQjX-hlNSi6-AT7GRQGLeiygwou&export=download"
+          mime=$(file --mime-type -b /tmp/raw.img)
+          echo "Downloaded $(wc -c < /tmp/raw.img) bytes, type: $mime"
+          case "$mime" in image/*) ;; *) echo "Not an image — Drive may have returned an interstitial page"; head -c 400 /tmp/raw.img; exit 1;; esac
+      - name: Optimize to a bundle-friendly JPEG
+        run: |
+          sudo apt-get update -qq >/dev/null && sudo apt-get install -y -qq imagemagick >/dev/null
+          convert /tmp/raw.img -auto-orient -resize '1600x1600>' -strip -quality 82 apps/web/src/assets/moment-photo.jpg
+          ls -la apps/web/src/assets/
+      - name: Commit the photo
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add apps/web/src/assets/moment-photo.jpg
+          git commit -m "Add classroom moment photo source asset"
+          git push
