@@ -6,6 +6,7 @@ import { Button, IconButton, Modal } from '../../components/ui';
 import { useAddEvent, useDeleteEvent } from '../../hooks/useCompass';
 import { firstName } from '../../lib/format';
 import { useSession } from '../../lib/session';
+import { momentPhoto } from '../../assets/momentPhoto';
 import { attendanceWeek, daysUntil, fmtShortDate, fmtTime, roomName, StatCard, todayIso } from './common';
 
 export type QuickAction = 'add-child' | 'take-attendance' | 'send-message' | 'record-payment' | 'add-activity' | 'view-reports' | 'view-activities' | 'view-curriculum' | 'view-cacfp' | 'view-staff';
@@ -145,7 +146,7 @@ export function DashboardTab({ data, onAction }: { data: DashboardData; onAction
         </article>
         <article className="curriculum-promo">
           <div><span className="promo-sun">☀</span><h2>Bright Path Curriculum</h2><p>Nurturing hearts.<br/>Inspiring minds.</p><Button className="white-outline-button" onClick={() => onAction('view-curriculum')}>View Curriculum</Button></div>
-          <span className="promo-art"><img src="/garden-moment.svg" alt="Children exploring a garden activity"/></span>
+          <span className="promo-art"><img src={momentPhoto} alt="Children exploring flowers together outside"/></span>
         </article>
       </div>
     </section>

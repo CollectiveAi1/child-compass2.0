@@ -21,18 +21,15 @@ const jsFile = indexHtml.match(/src="\/(assets\/index-[^"]+\.js)"/)?.[1];
 const cssFile = indexHtml.match(/href="\/(assets\/index-[^"]+\.css)"/)?.[1];
 if (!jsFile || !cssFile) throw new Error('Could not locate built assets in apps/web/dist/index.html');
 
-let bundle = readFileSync(resolve(dist, jsFile), 'utf8');
+const bundle = readFileSync(resolve(dist, jsFile), 'utf8');
 const styles = readFileSync(resolve(dist, cssFile), 'utf8');
 
-// Local assets referenced by absolute path break on file:// — inline them
-// everywhere they appear: in the JS bundle and in the seeded activity data.
-const gardenSvg = readFileSync(resolve(root, 'apps/web/public/garden-moment.svg'));
-const gardenDataUrl = `data:image/svg+xml;base64,${gardenSvg.toString('base64')}`;
-bundle = bundle.split('/garden-moment.svg').join(gardenDataUrl);
+// The classroom moment photo is base64-embedded in the bundle itself
+// (apps/web/src/assets/momentPhoto.ts) and activity media URLs are tokens the
+// app resolves at render time, so no asset rewriting is needed here.
 
 // Dump the real API seed so the standalone demo matches the server exactly.
-const seed = execFileSync('npx', ['tsx', '-e', "import('./apps/api/src/store.ts').then(m => console.log(JSON.stringify(m.resetDemoStore())))"], { cwd: root, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 })
-  .trim().split('/garden-moment.svg').join(gardenDataUrl);
+const seed = execFileSync('npx', ['tsx', '-e', "import('./apps/api/src/store.ts').then(m => console.log(JSON.stringify(m.resetDemoStore())))"], { cwd: root, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 }).trim();
 
 const mockApi = readFileSync(resolve(root, 'scripts/standalone-mock-api.js'), 'utf8');
 const favicon = readFileSync(resolve(root, 'apps/web/public/icons/icon.svg'));

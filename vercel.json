@@ -8,6 +8,6 @@
   },
   "rewrites": [
     { "source": "/api/:path*", "destination": "/api/index" },
-    { "source": "/((?!api/|assets/|icons/|sw\\.js|manifest\\.webmanifest|garden-moment\\.svg).*)", "destination": "/index.html" }
+    { "source": "/((?!api/|assets/|icons/|sw\\.js|manifest\\.webmanifest).*)", "destination": "/index.html" }
   ]
 }
