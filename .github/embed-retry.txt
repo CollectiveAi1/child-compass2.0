@@ -1,3 +1,0 @@
-Retry marker for the embed-moment-photo workflow (cron is disabled on forks,
-so pushes to main stand in as the retry trigger). Removed with the workflow.
-Attempt: 7 (sharing enabled)
