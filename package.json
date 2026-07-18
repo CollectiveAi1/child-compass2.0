@@ -13,6 +13,7 @@
     "start": "npm run start -w @compass/api",
     "build": "npm run build -w @compass/shared && npm run build -w @compass/api && npm run build -w @compass/web",
     "build:web": "npm run build -w @compass/web",
+    "standalone": "npm run build:web && node scripts/build-standalone.mjs",
     "icons": "node scripts/make-icons.mjs",
     "desktop": "npm --prefix apps/desktop start",
     "test": "vitest run",
