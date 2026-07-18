@@ -14,7 +14,18 @@ All demo accounts use password `demo123`.
 | Teacher | `teacher@compass.demo` | Living dashboard, attendance Kanban, quick logs, handover, curriculum, and messages |
 | Parent | `parent@compass.demo` | Daily stories, live feed, secure messages, billing, and child profile |
 
-## Run locally
+## Test locally — no install needed
+
+The fastest way to try the app is the single-file demo, **`child-compass-local.html`** in the repo root. Download that one file and double-click it (or open it in any browser). All three portals, the reports center, document uploads/downloads, messaging, and payments run entirely in the browser against a built-in demo API — no Node, no server, no install.
+
+To regenerate it after making changes:
+
+```bash
+npm install
+npm run standalone
+```
+
+## Run locally (full stack)
 
 Requirements: Node.js 20+ and npm 10+.
 
@@ -24,6 +35,14 @@ npm run dev
 ```
 
 Open `http://localhost:5173`. The API and Socket.IO server run on `http://localhost:4000`.
+
+For a production-style run (one server for web + API + live sync):
+
+```bash
+npm install
+npm run build
+npm start   # serves everything at http://localhost:4000
+```
 
 ## Deploy to Vercel
 
