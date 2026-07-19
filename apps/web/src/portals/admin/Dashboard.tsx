@@ -3,7 +3,8 @@ import { BookOpen, Calendar, CalendarDays, CalendarX, CheckCircle2, ClipboardChe
 import type { DashboardData } from '@compass/shared';
 import { formatMoney } from '@compass/shared';
 import { Button, IconButton, Modal } from '../../components/ui';
-import { useAddEvent, useDeleteEvent } from '../../hooks/useCompass';
+import { useDeleteEvent } from '../../hooks/useCompass';
+import { EventModal } from './EventModal';
 import { firstName } from '../../lib/format';
 import { useSession } from '../../lib/session';
 import { momentPhoto } from '../../assets/momentPhoto';
@@ -31,29 +32,6 @@ function AttendanceChart({ days }: { days: { date: string; present: number; abse
     </svg>
     <figcaption className="chart-legend"><span><i className="dot present"/>Checked In</span><span><i className="dot absent"/>Absent</span></figcaption>
   </figure>;
-}
-
-function EventModal({ onClose }: { onClose: () => void }) {
-  const addEvent = useAddEvent();
-  const [form, setForm] = useState({ title: '', date: todayIso(), time: '', detail: '', attendees: '' });
-  return <Modal title="Add event" eyebrow="Center calendar" onClose={onClose}>
-    <form className="stacked-form" onSubmit={async event => {
-      event.preventDefault();
-      await addEvent.mutateAsync({ title: form.title, date: form.date, time: form.time || undefined, detail: form.detail || undefined, attendees: form.attendees ? Number(form.attendees) : undefined });
-      onClose();
-    }}>
-      <label>Event title<input required maxLength={120} value={form.title} onChange={event => setForm({ ...form, title: event.target.value })} placeholder="Family Picnic Friday"/></label>
-      <div className="form-row">
-        <label>Date<input type="date" required value={form.date} onChange={event => setForm({ ...form, date: event.target.value })}/></label>
-        <label>Time (optional)<input value={form.time} onChange={event => setForm({ ...form, time: event.target.value })} placeholder="9:00 AM – 1:00 PM"/></label>
-      </div>
-      <div className="form-row">
-        <label>Details (optional)<input maxLength={300} value={form.detail} onChange={event => setForm({ ...form, detail: event.target.value })} placeholder="What families should know"/></label>
-        <label>Expected attendees<input type="number" min={0} value={form.attendees} onChange={event => setForm({ ...form, attendees: event.target.value })}/></label>
-      </div>
-      <div className="modal-actions"><Button type="button" className="button-ghost" onClick={onClose}>Cancel</Button><Button className="button-primary" disabled={!form.title || addEvent.isPending}>{addEvent.isPending ? 'Saving…' : 'Add event'}</Button></div>
-    </form>
-  </Modal>;
 }
 
 const TIPS = [

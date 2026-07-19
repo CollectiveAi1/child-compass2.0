@@ -218,6 +218,47 @@ describe('Child Care Compass API', () => {
     expect(response.body.capacity).toBe(52);
   });
 
+  it('runs the licensing lifecycle: inspection, violation, corrective action, drill, checklist', async () => {
+    const { app } = createApp();
+    const token = await login(app, 'admin@compass.demo');
+    const inspection = await request(app).post('/api/inspections').set('Authorization', `Bearer ${token}`)
+      .send({ date: '2026-08-01', type: 'follow_up', inspector: 'D. Okafor, ODJFS', status: 'scheduled', findings: 0, notes: 'Verify surfacing fix.' });
+    expect(inspection.status).toBe(201);
+    const violation = await request(app).post('/api/violations').set('Authorization', `Bearer ${token}`)
+      .send({ code: '5101:2-12-07', description: 'Posted menu missing substitution note.', severity: 'low', citedOn: '2026-07-18', inspectionId: inspection.body.id });
+    expect(violation.status).toBe(201);
+    const action = await request(app).post('/api/corrective-actions').set('Authorization', `Bearer ${token}`)
+      .send({ violationId: violation.body.id, description: 'Post substitution note with weekly menu.', assignedTo: 'Sofia Martinez', dueDate: '2026-07-25' });
+    expect(action.status).toBe(201);
+    const completed = await request(app).patch(`/api/corrective-actions/${action.body.id}`).set('Authorization', `Bearer ${token}`).send({ status: 'completed' });
+    expect(completed.body.status).toBe('completed');
+    expect(completed.body.completedOn).toBeTruthy();
+    const drill = await request(app).post('/api/drills').set('Authorization', `Bearer ${token}`)
+      .send({ type: 'fire', date: '2026-07-18', timeOfDay: '10:05 AM', durationMinutes: 4, participants: 18 });
+    expect(drill.status).toBe(201);
+    expect(drill.body.conductedBy).toBe('Sarah Johnson');
+    const check = await request(app).patch('/api/compliance-checks/check-4').set('Authorization', `Bearer ${token}`).send({ status: 'compliant' });
+    expect(check.body.status).toBe('compliant');
+    const dashboard = await request(app).get('/api/dashboard').set('Authorization', `Bearer ${token}`);
+    expect(dashboard.body.inspections.some((item: { id: string }) => item.id === inspection.body.id)).toBe(true);
+    expect(dashboard.body.drills[0].id).toBe(drill.body.id);
+  });
+
+  it('keeps licensing data away from teachers and parents', async () => {
+    const { app } = createApp();
+    const teacherToken = await login(app, 'teacher@compass.demo');
+    const parentToken = await login(app, 'parent@compass.demo');
+    for (const token of [teacherToken, parentToken]) {
+      const dashboard = await request(app).get('/api/dashboard').set('Authorization', `Bearer ${token}`);
+      expect(dashboard.body.inspections).toEqual([]);
+      expect(dashboard.body.violations).toEqual([]);
+      expect(dashboard.body.complianceChecks).toEqual([]);
+      const denied = await request(app).post('/api/drills').set('Authorization', `Bearer ${token}`)
+        .send({ type: 'fire', date: '2026-07-18', timeOfDay: '10:05 AM', durationMinutes: 4, participants: 18 });
+      expect(denied.status).toBe(403);
+    }
+  });
+
   it('strips document bytes from the dashboard payload', async () => {
     const { app } = createApp();
     const token = await login(app, 'admin@compass.demo');

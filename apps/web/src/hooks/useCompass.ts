@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { io } from 'socket.io-client';
 import { create } from 'zustand';
-import type { ActivityType, AttendanceStatus, ChildMedical, DocumentCategory, MealType, Message, StaffCredential } from '@compass/shared';
+import type { ActivityType, AttendanceStatus, ChildMedical, ComplaintStatus, ComplianceCheckStatus, CorrectiveActionStatus, DocumentCategory, DrillType, InspectionStatus, InspectionType, MealType, Message, StaffCredential, ViolationSeverity, ViolationStatus } from '@compass/shared';
 import { API_BASE, ApiFailure, api, getDashboard } from '../lib/api';
 import { useSession } from '../lib/session';
 
@@ -74,6 +74,18 @@ export const useDeleteDocument = () => useCompassMutation<{ documentId: string }
 export const useCreateInvoice = () => useCompassMutation<{ childId: string; amount: number; dueDate: string; description: string }>(() => '/invoices', 'POST', v => v);
 export const useRecordPayment = () => useCompassMutation<{ invoiceId: string; method: string }>(v => `/invoices/${v.invoiceId}/record-payment`, 'POST', ({ invoiceId: _id, ...rest }) => rest);
 export const useUpdateCenter = () => useCompassMutation<{ name?: string; address?: string; phone?: string; license?: string; capacity?: number }>(() => '/center', 'PATCH', v => v);
+
+export interface NewInspectionInput { date: string; type: InspectionType; inspector: string; status: InspectionStatus; findings: number; notes: string }
+export const useAddInspection = () => useCompassMutation<NewInspectionInput>(() => '/inspections', 'POST', v => v);
+export const useUpdateInspection = () => useCompassMutation<{ inspectionId: string } & Partial<NewInspectionInput>>(v => `/inspections/${v.inspectionId}`, 'PATCH', ({ inspectionId: _id, ...rest }) => rest);
+export const useAddComplaint = () => useCompassMutation<{ receivedOn: string; source: string; summary: string }>(() => '/complaints', 'POST', v => v);
+export const useUpdateComplaint = () => useCompassMutation<{ complaintId: string; status?: ComplaintStatus; resolution?: string }>(v => `/complaints/${v.complaintId}`, 'PATCH', ({ complaintId: _id, ...rest }) => rest);
+export const useAddViolation = () => useCompassMutation<{ code: string; description: string; severity: ViolationSeverity; citedOn: string; inspectionId?: string }>(() => '/violations', 'POST', v => v);
+export const useUpdateViolation = () => useCompassMutation<{ violationId: string; status: ViolationStatus }>(v => `/violations/${v.violationId}`, 'PATCH', v => ({ status: v.status }));
+export const useAddCorrectiveAction = () => useCompassMutation<{ violationId?: string; description: string; assignedTo: string; dueDate: string }>(() => '/corrective-actions', 'POST', v => v);
+export const useUpdateCorrectiveAction = () => useCompassMutation<{ actionId: string; status: CorrectiveActionStatus }>(v => `/corrective-actions/${v.actionId}`, 'PATCH', v => ({ status: v.status }));
+export const useAddDrill = () => useCompassMutation<{ type: DrillType; date: string; timeOfDay: string; durationMinutes: number; participants: number; notes?: string }>(() => '/drills', 'POST', v => v);
+export const useUpdateComplianceCheck = () => useCompassMutation<{ checkId: string; status: ComplianceCheckStatus }>(v => `/compliance-checks/${v.checkId}`, 'PATCH', v => ({ status: v.status }));
 
 // Marks the visible thread's incoming messages as read so unread badges clear.
 // Pass `undefined` while the messages view is closed to leave counts alone.
