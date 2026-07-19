@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { BarChart3, BookOpen, CalendarCheck, ClipboardList, Contact, DollarSign, LayoutDashboard, MessageCircle, Settings, UserPlus, Users, UtensilsCrossed } from 'lucide-react';
+import { BarChart3, BookOpen, CalendarCheck, ClipboardList, Contact, DollarSign, LayoutDashboard, MessageCircle, Settings, ShieldCheck, UserPlus, Users, UtensilsCrossed } from 'lucide-react';
 import { formatMoney } from '@compass/shared';
 import { AppShell, type ShellNotification } from '../components/AppShell';
 import { ErrorScreen, LoadingScreen } from '../components/ui';
@@ -15,6 +15,7 @@ import { ActivitiesTab } from './admin/Activities';
 import { CommunicationsTab } from './admin/Communications';
 import { BillingTab } from './admin/Billing';
 import { CacfpTab } from './admin/Cacfp';
+import { LicensingTab } from './admin/Licensing';
 import { ReportsTab } from './admin/Reports';
 import { SettingsTab } from './admin/SettingsTab';
 import { daysUntil } from './admin/common';
@@ -30,6 +31,7 @@ const navigation = [
   { id: 'communications', label: 'Communications', icon: <MessageCircle size={19}/> },
   { id: 'billing', label: 'Billing & Payments', icon: <DollarSign size={19}/> },
   { id: 'cacfp', label: 'CACFP', icon: <UtensilsCrossed size={19}/>, tag: 'Food Program' },
+  { id: 'licensing', label: 'Licensing Compliance', icon: <ShieldCheck size={19}/> },
   { id: 'reports', label: 'Reports', icon: <BarChart3 size={19}/> },
   { id: 'settings', label: 'Settings', icon: <Settings size={19}/> },
 ];
@@ -85,6 +87,7 @@ export function AdminPortal() {
       {active === 'communications' ? <CommunicationsTab data={data}/> : null}
       {active === 'billing' ? <BillingTab data={data} openRecord={intent === 'record-payment'} onRecordHandled={consumeIntent}/> : null}
       {active === 'cacfp' ? <CacfpTab data={data}/> : null}
+      {active === 'licensing' ? <LicensingTab data={data}/> : null}
       {active === 'reports' ? <ReportsTab data={data}/> : null}
       {active === 'settings' ? <SettingsTab data={data}/> : null}
     </main>

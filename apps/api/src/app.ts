@@ -1,7 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import { z } from 'zod';
-import type { Activity, AttendanceStatus, CenterDocumentFile, CenterEvent, Child, EnrollmentApplication, Invoice, MealRecord, Message, User } from '@compass/shared';
+import type { Activity, AttendanceStatus, CenterDocumentFile, CenterEvent, Child, Complaint, CorrectiveAction, EmergencyDrill, EnrollmentApplication, Inspection, Invoice, MealRecord, Message, User, Violation } from '@compass/shared';
 import { allow, authenticate, signUser, type AuthRequest } from './auth';
 import { store, today } from './store';
 
@@ -40,6 +40,16 @@ const documentSchema = z.object({ name: z.string().min(1).max(120), category: z.
 const centerSchema = z.object({ name: z.string().min(1).max(100).optional(), address: z.string().max(160).optional(), phone: z.string().max(30).optional(), license: z.string().max(40).optional(), capacity: z.number().int().min(1).max(500).optional() });
 const invoiceCreateSchema = z.object({ childId: z.string(), amount: z.number().int().min(1).max(10_000_000), dueDate: z.string().min(8).max(10), description: z.string().min(1).max(120) });
 const recordPaymentSchema = z.object({ method: z.string().min(1).max(60) });
+const inspectionCreateSchema = z.object({ date: z.string().min(8).max(10), type: z.enum(['annual', 'renewal', 'monitoring', 'follow_up', 'complaint']), inspector: z.string().min(1).max(80), status: z.enum(['scheduled', 'passed', 'findings', 'failed']), findings: z.number().int().min(0).max(200), notes: z.string().max(500) });
+const inspectionUpdateSchema = inspectionCreateSchema.partial();
+const complaintCreateSchema = z.object({ receivedOn: z.string().min(8).max(10), source: z.enum(['parent', 'staff', 'anonymous', 'state']), summary: z.string().min(1).max(500) });
+const complaintUpdateSchema = z.object({ status: z.enum(['open', 'investigating', 'resolved', 'unfounded']).optional(), resolution: z.string().max(500).optional() });
+const violationCreateSchema = z.object({ code: z.string().min(1).max(40), description: z.string().min(1).max(400), severity: z.enum(['low', 'moderate', 'serious']), citedOn: z.string().min(8).max(10), inspectionId: z.string().optional() });
+const violationUpdateSchema = z.object({ status: z.enum(['open', 'corrected', 'verified']) });
+const actionCreateSchema = z.object({ violationId: z.string().optional(), description: z.string().min(1).max(400), assignedTo: z.string().min(1).max(80), dueDate: z.string().min(8).max(10) });
+const actionUpdateSchema = z.object({ status: z.enum(['open', 'in_progress', 'completed', 'verified']) });
+const drillCreateSchema = z.object({ type: z.enum(['fire', 'tornado', 'lockdown', 'evacuation']), date: z.string().min(8).max(10), timeOfDay: z.string().min(1).max(20), durationMinutes: z.number().int().min(1).max(240), participants: z.number().int().min(0).max(500), notes: z.string().max(300).optional() });
+const complianceCheckUpdateSchema = z.object({ status: z.enum(['compliant', 'action_needed', 'pending']) });
 
 const uid = (prefix: string) => `${prefix}-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
 
@@ -89,6 +99,7 @@ function scopedDashboard(user: NonNullable<AuthRequest['user']>) {
   const enrollments = user.role === 'admin' ? data.enrollments : [];
   const meals = user.role === 'parent' ? [] : data.meals;
   const cacfpClaims = user.role === 'admin' ? data.cacfpClaims : [];
+  const isAdmin = user.role === 'admin';
   // Document bytes stay out of the dashboard payload; GET /documents/:id serves them.
   const documents = user.role === 'parent' ? [] : data.documents.map(({ dataUrl: _dataUrl, ...meta }) => meta);
   const attendanceLog = data.attendanceLog.filter(entry => visibleChildIds.includes(entry.childId));
@@ -96,6 +107,9 @@ function scopedDashboard(user: NonNullable<AuthRequest['user']>) {
     center: data.center, classrooms, children, activities: [...activities].sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
     messages: [...messages].sort((a, b) => a.createdAt.localeCompare(b.createdAt)), invoices, curriculum, staff,
     enrollments, events: data.events, meals, cacfpClaims, documents, attendanceLog,
+    inspections: isAdmin ? data.inspections : [], complaints: isAdmin ? data.complaints : [],
+    violations: isAdmin ? data.violations : [], correctiveActions: isAdmin ? data.correctiveActions : [],
+    drills: isAdmin ? data.drills : [], complianceChecks: isAdmin ? data.complianceChecks : [],
     stats: {
       present: children.filter(child => child.attendanceStatus === 'present').length,
       expected: children.filter(child => child.attendanceStatus === 'expected').length,
@@ -362,6 +376,105 @@ export function createApp(broadcast: Broadcast = () => undefined) {
     broadcast('data:updated', { type: 'document', id: removed!.id });
     const { dataUrl: _dataUrl, ...meta } = removed!;
     return res.json(meta);
+  });
+
+  app.post('/api/inspections', authenticate, allow('admin'), (req: AuthRequest, res) => {
+    const body = parseBody(inspectionCreateSchema, req.body, res);
+    if (!body) return;
+    const inspection: Inspection = { id: uid('inspection'), centerId: req.user!.centerId, ...body };
+    store().inspections.push(inspection);
+    store().inspections.sort((a, b) => b.date.localeCompare(a.date));
+    broadcast('data:updated', { type: 'inspection', id: inspection.id });
+    return res.status(201).json(inspection);
+  });
+
+  app.patch('/api/inspections/:inspectionId', authenticate, allow('admin'), (req: AuthRequest, res) => {
+    const body = parseBody(inspectionUpdateSchema, req.body, res);
+    if (!body) return;
+    const inspection = store().inspections.find(item => item.id === req.params.inspectionId && item.centerId === req.user!.centerId);
+    if (!inspection) return res.status(404).json({ error: 'not_found', message: 'Inspection not found.' });
+    Object.assign(inspection, body);
+    broadcast('data:updated', { type: 'inspection', id: inspection.id });
+    return res.json(inspection);
+  });
+
+  app.post('/api/complaints', authenticate, allow('admin'), (req: AuthRequest, res) => {
+    const body = parseBody(complaintCreateSchema, req.body, res);
+    if (!body) return;
+    const complaint: Complaint = { id: uid('complaint'), centerId: req.user!.centerId, status: 'open', resolution: '', ...body };
+    store().complaints.unshift(complaint);
+    broadcast('data:updated', { type: 'complaint', id: complaint.id });
+    return res.status(201).json(complaint);
+  });
+
+  app.patch('/api/complaints/:complaintId', authenticate, allow('admin'), (req: AuthRequest, res) => {
+    const body = parseBody(complaintUpdateSchema, req.body, res);
+    if (!body) return;
+    const complaint = store().complaints.find(item => item.id === req.params.complaintId && item.centerId === req.user!.centerId);
+    if (!complaint) return res.status(404).json({ error: 'not_found', message: 'Complaint not found.' });
+    Object.assign(complaint, body);
+    broadcast('data:updated', { type: 'complaint', id: complaint.id });
+    return res.json(complaint);
+  });
+
+  app.post('/api/violations', authenticate, allow('admin'), (req: AuthRequest, res) => {
+    const body = parseBody(violationCreateSchema, req.body, res);
+    if (!body) return;
+    const violation: Violation = { id: uid('violation'), centerId: req.user!.centerId, status: 'open', ...body };
+    store().violations.unshift(violation);
+    broadcast('data:updated', { type: 'violation', id: violation.id });
+    return res.status(201).json(violation);
+  });
+
+  app.patch('/api/violations/:violationId', authenticate, allow('admin'), (req: AuthRequest, res) => {
+    const body = parseBody(violationUpdateSchema, req.body, res);
+    if (!body) return;
+    const violation = store().violations.find(item => item.id === req.params.violationId && item.centerId === req.user!.centerId);
+    if (!violation) return res.status(404).json({ error: 'not_found', message: 'Violation not found.' });
+    violation.status = body.status;
+    broadcast('data:updated', { type: 'violation', id: violation.id });
+    return res.json(violation);
+  });
+
+  app.post('/api/corrective-actions', authenticate, allow('admin'), (req: AuthRequest, res) => {
+    const body = parseBody(actionCreateSchema, req.body, res);
+    if (!body) return;
+    const action: CorrectiveAction = { id: uid('action'), centerId: req.user!.centerId, status: 'open', ...body };
+    store().correctiveActions.unshift(action);
+    broadcast('data:updated', { type: 'corrective_action', id: action.id });
+    return res.status(201).json(action);
+  });
+
+  app.patch('/api/corrective-actions/:actionId', authenticate, allow('admin'), (req: AuthRequest, res) => {
+    const body = parseBody(actionUpdateSchema, req.body, res);
+    if (!body) return;
+    const action = store().correctiveActions.find(item => item.id === req.params.actionId && item.centerId === req.user!.centerId);
+    if (!action) return res.status(404).json({ error: 'not_found', message: 'Corrective action not found.' });
+    action.status = body.status;
+    action.completedOn = body.status === 'completed' || body.status === 'verified' ? (action.completedOn ?? today()) : undefined;
+    broadcast('data:updated', { type: 'corrective_action', id: action.id });
+    return res.json(action);
+  });
+
+  app.post('/api/drills', authenticate, allow('admin'), (req: AuthRequest, res) => {
+    const body = parseBody(drillCreateSchema, req.body, res);
+    if (!body) return;
+    const drill: EmergencyDrill = { id: uid('drill'), centerId: req.user!.centerId, conductedBy: req.user!.name, ...body };
+    store().drills.unshift(drill);
+    store().drills.sort((a, b) => b.date.localeCompare(a.date));
+    broadcast('data:updated', { type: 'drill', id: drill.id });
+    return res.status(201).json(drill);
+  });
+
+  app.patch('/api/compliance-checks/:checkId', authenticate, allow('admin'), (req: AuthRequest, res) => {
+    const body = parseBody(complianceCheckUpdateSchema, req.body, res);
+    if (!body) return;
+    const check = store().complianceChecks.find(item => item.id === req.params.checkId && item.centerId === req.user!.centerId);
+    if (!check) return res.status(404).json({ error: 'not_found', message: 'Checklist item not found.' });
+    check.status = body.status;
+    check.lastChecked = today();
+    broadcast('data:updated', { type: 'compliance_check', id: check.id });
+    return res.json(check);
   });
 
   app.patch('/api/center', authenticate, allow('admin'), (req: AuthRequest, res) => {

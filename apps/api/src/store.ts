@@ -1,4 +1,4 @@
-import type { Activity, AttendanceEntry, CacfpClaim, Center, CenterDocumentFile, CenterEvent, Child, Classroom, Curriculum, EnrollmentApplication, Invoice, MealRecord, Message, User } from '@compass/shared';
+import type { Activity, AttendanceEntry, CacfpClaim, Center, CenterDocumentFile, CenterEvent, Child, Classroom, Complaint, ComplianceCheck, CorrectiveAction, Curriculum, EmergencyDrill, EnrollmentApplication, Inspection, Invoice, MealRecord, Message, User, Violation } from '@compass/shared';
 
 // In-memory demo storage. On Vercel it lives in the function instance's memory
 // and resets when the instance recycles; swap for a managed PostgreSQL database
@@ -18,6 +18,12 @@ export interface DemoStore {
   cacfpClaims: CacfpClaim[];
   documents: CenterDocumentFile[];
   attendanceLog: AttendanceEntry[];
+  inspections: Inspection[];
+  complaints: Complaint[];
+  violations: Violation[];
+  correctiveActions: CorrectiveAction[];
+  drills: EmergencyDrill[];
+  complianceChecks: ComplianceCheck[];
 }
 
 const ago = (minutes: number) => new Date(Date.now() - minutes * 60_000).toISOString();
@@ -37,7 +43,7 @@ function pastWeekdays(count: number): string[] {
 
 // Builds a small but valid single-page PDF so seeded documents download and
 // open like the real files admins will upload later.
-export function tinyPdf(title: string, lines: string[]): string {
+function tinyPdf(title: string, lines: string[]): string {
   const escape = (text: string) => text.replace(/[\\()]/g, char => `\\${char}`);
   const body = [`BT /F1 16 Tf 72 740 Td (${escape(title)}) Tj ET`, 'BT /F1 11 Tf 14 TL 72 710 Td', ...lines.map(line => `(${escape(line)}) Tj T*`), 'ET'].join('\n');
   const objects = [
@@ -231,9 +237,50 @@ function seed(): DemoStore {
     { id: 'document-4', centerId: center.id, name: 'Enrollment packet.pdf', category: 'enrollment', contentType: 'application/pdf', size: 1240, uploadedBy: 'Sarah Johnson', uploadedAt: ago(55_000), dataUrl: tinyPdf('Enrollment Packet', ['Bright Path Learning Center', 'Welcome! Please complete and return:', '', '1. Child information & emergency contacts', '2. Immunization records', '3. Authorized pickup list', '4. Tuition agreement']) },
     { id: 'document-5', centerId: center.id, name: 'Fire drill log.pdf', category: 'licensing', contentType: 'application/pdf', size: 990, uploadedBy: 'Sarah Johnson', uploadedAt: ago(70_000), dataUrl: tinyPdf('Fire Drill Log', ['Bright Path Learning Center — License OH-ELC-28491', '', 'Date         Time       Evacuation time    Conducted by', '_________    ______     _____________      ____________', '_________    ______     _____________      ____________']) },
     { id: 'document-6', centerId: center.id, name: 'Garden exploration guide.pdf', category: 'curriculum', contentType: 'application/pdf', size: 1310, uploadedBy: 'Jordan Ellis', uploadedAt: ago(9_000), dataUrl: tinyPdf('Garden Exploration Guide', ['Theme: Little Garden, Big Ideas', '', 'Stations: leaf rubbings, seed sorting, watering team', 'Vocabulary: sprout, stem, petal, roots', 'Family tie-in: send a photo of a plant at home']) },
+    { id: 'document-7', centerId: center.id, name: 'Incident report form.pdf', category: 'licensing', contentType: 'application/pdf', size: 1210, uploadedBy: 'Sarah Johnson', uploadedAt: ago(80_000), dataUrl: tinyPdf('Incident / Injury Report', ['Bright Path Learning Center — License OH-ELC-28491', 'Child: ____________________  Date: ________  Time: ______', '', 'What happened: _________________________________________', 'First aid given: ________________________________________', 'Staff witness: __________________  Parent notified: _____', 'Staff signature: ________________  Parent signature: ____']) },
+    { id: 'document-8', centerId: center.id, name: 'Medication authorization form.pdf', category: 'licensing', contentType: 'application/pdf', size: 1180, uploadedBy: 'Sarah Johnson', uploadedAt: ago(85_000), dataUrl: tinyPdf('Medication Authorization', ['Bright Path Learning Center', 'Child: ____________________  DOB: ____________', '', 'Medication: ____________  Dose: ______  Times: ________', 'Prescriber: ____________  Phone: _____________________', 'Parent authorization signature: _______________________', 'Two-staff verification required for every administration.']) },
   ];
 
-  return { center, users, classrooms, children, activities, messages, invoices, curriculum, enrollments, events, meals, cacfpClaims, documents, attendanceLog };
+  const inspections: Inspection[] = [
+    { id: 'inspection-1', centerId: center.id, date: ahead(-160), type: 'renewal', inspector: 'M. Alvarez, ODJFS', status: 'passed', findings: 0, notes: 'License renewed with no findings.' },
+    { id: 'inspection-2', centerId: center.id, date: ahead(-45), type: 'annual', inspector: 'D. Okafor, ODJFS', status: 'findings', findings: 2, notes: 'Two low-risk findings cited; corrective action plan submitted.' },
+    { id: 'inspection-3', centerId: center.id, date: ahead(21), type: 'monitoring', inspector: 'D. Okafor, ODJFS', status: 'scheduled', findings: 0, notes: 'Routine monitoring visit — verify corrective actions.' },
+  ];
+  const complaints: Complaint[] = [
+    { id: 'complaint-1', centerId: center.id, receivedOn: ahead(-70), source: 'parent', summary: 'Concern about pickup-line supervision during afternoon dismissal.', status: 'resolved', resolution: 'Added a second staff member to dismissal duty; parent notified and satisfied.' },
+    { id: 'complaint-2', centerId: center.id, receivedOn: ahead(-9), source: 'anonymous', summary: 'Report that the infant room briefly exceeded ratio on a Friday afternoon.', status: 'investigating', resolution: '' },
+  ];
+  const violations: Violation[] = [
+    { id: 'violation-1', centerId: center.id, code: '5101:2-12-22', description: 'Medication log missing second-staff verification signature for two entries.', severity: 'low', citedOn: ahead(-45), status: 'verified', inspectionId: 'inspection-2' },
+    { id: 'violation-2', centerId: center.id, code: '5101:2-12-15', description: 'Playground resilient surfacing depth below required 9 inches under climber.', severity: 'moderate', citedOn: ahead(-45), status: 'open', inspectionId: 'inspection-2' },
+  ];
+  const correctiveActions: CorrectiveAction[] = [
+    { id: 'action-1', centerId: center.id, violationId: 'violation-1', description: 'Retrain all staff on two-signature medication logging; audit logs weekly.', assignedTo: 'Sarah Johnson', dueDate: ahead(-20), status: 'verified', completedOn: ahead(-25) },
+    { id: 'action-2', centerId: center.id, violationId: 'violation-2', description: 'Top up engineered wood fiber under climber to 9-inch depth and document measurement.', assignedTo: 'Jordan Ellis', dueDate: ahead(10), status: 'in_progress' },
+  ];
+  const drills: EmergencyDrill[] = [
+    { id: 'drill-1', centerId: center.id, type: 'fire', date: ahead(-36), timeOfDay: '10:15 AM', durationMinutes: 4, participants: 19, conductedBy: 'Sarah Johnson', notes: 'Full evacuation in under 4 minutes.' },
+    { id: 'drill-2', centerId: center.id, type: 'fire', date: ahead(-66), timeOfDay: '9:40 AM', durationMinutes: 5, participants: 21, conductedBy: 'Jordan Ellis' },
+    { id: 'drill-3', centerId: center.id, type: 'tornado', date: ahead(-50), timeOfDay: '11:00 AM', durationMinutes: 8, participants: 20, conductedBy: 'Sarah Johnson', notes: 'Shelter positions reviewed with new staff.' },
+    { id: 'drill-4', centerId: center.id, type: 'lockdown', date: ahead(-80), timeOfDay: '2:30 PM', durationMinutes: 12, participants: 18, conductedBy: 'Amara Wilson' },
+    { id: 'drill-5', centerId: center.id, type: 'evacuation', date: ahead(-140), timeOfDay: '10:00 AM', durationMinutes: 15, participants: 22, conductedBy: 'Sarah Johnson', notes: 'Walked to the designated off-site meeting point.' },
+  ];
+  const complianceChecks: ComplianceCheck[] = [
+    { id: 'check-1', centerId: center.id, category: 'monitoring', item: 'Daily attendance records complete and signed', status: 'compliant', lastChecked: ahead(-3) },
+    { id: 'check-2', centerId: center.id, category: 'monitoring', item: 'Staff/child ratio logs current for all classrooms', status: 'compliant', lastChecked: ahead(-3) },
+    { id: 'check-3', centerId: center.id, category: 'monitoring', item: 'Medication administration logs double-signed', status: 'compliant', lastChecked: ahead(-6) },
+    { id: 'check-4', centerId: center.id, category: 'monitoring', item: 'Child files audited (immunizations, contacts, physicals)', status: 'action_needed', lastChecked: ahead(-31) },
+    { id: 'check-5', centerId: center.id, category: 'monitoring', item: 'Staff files audited (credentials, background checks)', status: 'compliant', lastChecked: ahead(-12) },
+    { id: 'check-6', centerId: center.id, category: 'monitoring', item: 'Incident reports filed and parent-signed within 24 hours', status: 'pending', lastChecked: ahead(-40) },
+    { id: 'check-7', centerId: center.id, category: 'health_safety', item: 'Smoke detectors and fire extinguishers inspected', status: 'compliant', lastChecked: ahead(-8) },
+    { id: 'check-8', centerId: center.id, category: 'health_safety', item: 'First aid kits stocked in every classroom and vehicle', status: 'compliant', lastChecked: ahead(-8) },
+    { id: 'check-9', centerId: center.id, category: 'health_safety', item: 'Cleaning chemicals locked and out of reach', status: 'compliant', lastChecked: ahead(-2) },
+    { id: 'check-10', centerId: center.id, category: 'health_safety', item: 'Playground surfacing depth measured and raked', status: 'action_needed', lastChecked: ahead(-15) },
+    { id: 'check-11', centerId: center.id, category: 'health_safety', item: 'Emergency numbers and evacuation maps posted in each room', status: 'compliant', lastChecked: ahead(-30) },
+    { id: 'check-12', centerId: center.id, category: 'health_safety', item: 'Daily sanitization schedule completed and initialed', status: 'compliant', lastChecked: ahead(-1) },
+  ];
+
+  return { center, users, classrooms, children, activities, messages, invoices, curriculum, enrollments, events, meals, cacfpClaims, documents, attendanceLog, inspections, complaints, violations, correctiveActions, drills, complianceChecks };
 }
 
 let current = seed();

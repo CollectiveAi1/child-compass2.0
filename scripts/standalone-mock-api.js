@@ -56,6 +56,12 @@
       cacfpClaims: user.role === 'admin' ? db.cacfpClaims : [],
       documents: user.role === 'parent' ? [] : db.documents.map(({ dataUrl, ...meta }) => meta),
       attendanceLog: db.attendanceLog.filter(entry => visibleChildIds.includes(entry.childId)),
+      inspections: user.role === 'admin' ? db.inspections : [],
+      complaints: user.role === 'admin' ? db.complaints : [],
+      violations: user.role === 'admin' ? db.violations : [],
+      correctiveActions: user.role === 'admin' ? db.correctiveActions : [],
+      drills: user.role === 'admin' ? db.drills : [],
+      complianceChecks: user.role === 'admin' ? db.complianceChecks : [],
       stats: {
         present: children.filter(child => child.attendanceStatus === 'present').length,
         expected: children.filter(child => child.attendanceStatus === 'expected').length,
@@ -247,6 +253,67 @@
     if (path === '/center' && method === 'PATCH' && user.role === 'admin') {
       Object.assign(db.center, body);
       return json(db.center);
+    }
+    if (user.role === 'admin') {
+      if (path === '/inspections' && method === 'POST') {
+        const inspection = { id: uid('inspection'), centerId: user.centerId, ...body };
+        db.inspections.push(inspection);
+        db.inspections.sort((a, b) => b.date.localeCompare(a.date));
+        return json(inspection, 201);
+      }
+      if ((match = path.match(/^\/inspections\/([^/]+)$/)) && method === 'PATCH') {
+        const inspection = db.inspections.find(item => item.id === match[1]);
+        if (!inspection) return notFound('Inspection not found.');
+        Object.assign(inspection, body);
+        return json(inspection);
+      }
+      if (path === '/complaints' && method === 'POST') {
+        const complaint = { id: uid('complaint'), centerId: user.centerId, status: 'open', resolution: '', ...body };
+        db.complaints.unshift(complaint);
+        return json(complaint, 201);
+      }
+      if ((match = path.match(/^\/complaints\/([^/]+)$/)) && method === 'PATCH') {
+        const complaint = db.complaints.find(item => item.id === match[1]);
+        if (!complaint) return notFound('Complaint not found.');
+        Object.assign(complaint, body);
+        return json(complaint);
+      }
+      if (path === '/violations' && method === 'POST') {
+        const violation = { id: uid('violation'), centerId: user.centerId, status: 'open', ...body };
+        db.violations.unshift(violation);
+        return json(violation, 201);
+      }
+      if ((match = path.match(/^\/violations\/([^/]+)$/)) && method === 'PATCH') {
+        const violation = db.violations.find(item => item.id === match[1]);
+        if (!violation) return notFound('Violation not found.');
+        violation.status = body.status;
+        return json(violation);
+      }
+      if (path === '/corrective-actions' && method === 'POST') {
+        const action = { id: uid('action'), centerId: user.centerId, status: 'open', ...body };
+        db.correctiveActions.unshift(action);
+        return json(action, 201);
+      }
+      if ((match = path.match(/^\/corrective-actions\/([^/]+)$/)) && method === 'PATCH') {
+        const action = db.correctiveActions.find(item => item.id === match[1]);
+        if (!action) return notFound('Corrective action not found.');
+        action.status = body.status;
+        action.completedOn = body.status === 'completed' || body.status === 'verified' ? (action.completedOn || today()) : undefined;
+        return json(action);
+      }
+      if (path === '/drills' && method === 'POST') {
+        const drill = { id: uid('drill'), centerId: user.centerId, conductedBy: user.name, ...body };
+        db.drills.unshift(drill);
+        db.drills.sort((a, b) => b.date.localeCompare(a.date));
+        return json(drill, 201);
+      }
+      if ((match = path.match(/^\/compliance-checks\/([^/]+)$/)) && method === 'PATCH') {
+        const check = db.complianceChecks.find(item => item.id === match[1]);
+        if (!check) return notFound('Checklist item not found.');
+        check.status = body.status;
+        check.lastChecked = today();
+        return json(check);
+      }
     }
     if (path === '/health') return json({ status: 'ok', service: 'Child Compass (standalone demo)' });
     return notFound('That route does not exist.');

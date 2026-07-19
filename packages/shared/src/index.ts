@@ -204,6 +204,84 @@ export interface AttendanceEntry {
   checkedOutAt?: string;
 }
 
+export type InspectionType = 'annual' | 'renewal' | 'monitoring' | 'follow_up' | 'complaint';
+export type InspectionStatus = 'scheduled' | 'passed' | 'findings' | 'failed';
+
+export interface Inspection {
+  id: string;
+  centerId: string;
+  date: string;
+  type: InspectionType;
+  inspector: string;
+  status: InspectionStatus;
+  findings: number;
+  notes: string;
+}
+
+export type ComplaintStatus = 'open' | 'investigating' | 'resolved' | 'unfounded';
+
+export interface Complaint {
+  id: string;
+  centerId: string;
+  receivedOn: string;
+  source: 'parent' | 'staff' | 'anonymous' | 'state';
+  summary: string;
+  status: ComplaintStatus;
+  resolution: string;
+}
+
+export type ViolationSeverity = 'low' | 'moderate' | 'serious';
+export type ViolationStatus = 'open' | 'corrected' | 'verified';
+
+export interface Violation {
+  id: string;
+  centerId: string;
+  code: string;
+  description: string;
+  severity: ViolationSeverity;
+  citedOn: string;
+  status: ViolationStatus;
+  inspectionId?: string;
+}
+
+export type CorrectiveActionStatus = 'open' | 'in_progress' | 'completed' | 'verified';
+
+export interface CorrectiveAction {
+  id: string;
+  centerId: string;
+  violationId?: string;
+  description: string;
+  assignedTo: string;
+  dueDate: string;
+  status: CorrectiveActionStatus;
+  completedOn?: string;
+}
+
+export type DrillType = 'fire' | 'tornado' | 'lockdown' | 'evacuation';
+
+export interface EmergencyDrill {
+  id: string;
+  centerId: string;
+  type: DrillType;
+  date: string;
+  timeOfDay: string;
+  durationMinutes: number;
+  participants: number;
+  conductedBy: string;
+  notes?: string;
+}
+
+export type ComplianceCheckStatus = 'compliant' | 'action_needed' | 'pending';
+
+export interface ComplianceCheck {
+  id: string;
+  centerId: string;
+  category: 'monitoring' | 'health_safety';
+  item: string;
+  status: ComplianceCheckStatus;
+  lastChecked: string;
+}
+
 export interface Curriculum {
   id: string;
   centerId: string;
@@ -230,6 +308,12 @@ export interface DashboardData {
   cacfpClaims: CacfpClaim[];
   documents: CenterDocument[];
   attendanceLog: AttendanceEntry[];
+  inspections: Inspection[];
+  complaints: Complaint[];
+  violations: Violation[];
+  correctiveActions: CorrectiveAction[];
+  drills: EmergencyDrill[];
+  complianceChecks: ComplianceCheck[];
   stats: {
     present: number;
     expected: number;

@@ -243,9 +243,49 @@ function seed() {
     { id: "document-3", centerId: center.id, name: "CACFP claim worksheet.pdf", category: "financial", contentType: "application/pdf", size: 1050, uploadedBy: "Sarah Johnson", uploadedAt: ago(4e4), dataUrl: tinyPdf("CACFP Monthly Claim Worksheet", ["Bright Path Learning Center", "Claim month: ____________", "", "Meal type      Days served    Total meals", "Breakfast      ___________    ___________", "Lunch          ___________    ___________", "Snack          ___________    ___________"]) },
     { id: "document-4", centerId: center.id, name: "Enrollment packet.pdf", category: "enrollment", contentType: "application/pdf", size: 1240, uploadedBy: "Sarah Johnson", uploadedAt: ago(55e3), dataUrl: tinyPdf("Enrollment Packet", ["Bright Path Learning Center", "Welcome! Please complete and return:", "", "1. Child information & emergency contacts", "2. Immunization records", "3. Authorized pickup list", "4. Tuition agreement"]) },
     { id: "document-5", centerId: center.id, name: "Fire drill log.pdf", category: "licensing", contentType: "application/pdf", size: 990, uploadedBy: "Sarah Johnson", uploadedAt: ago(7e4), dataUrl: tinyPdf("Fire Drill Log", ["Bright Path Learning Center \u2014 License OH-ELC-28491", "", "Date         Time       Evacuation time    Conducted by", "_________    ______     _____________      ____________", "_________    ______     _____________      ____________"]) },
-    { id: "document-6", centerId: center.id, name: "Garden exploration guide.pdf", category: "curriculum", contentType: "application/pdf", size: 1310, uploadedBy: "Jordan Ellis", uploadedAt: ago(9e3), dataUrl: tinyPdf("Garden Exploration Guide", ["Theme: Little Garden, Big Ideas", "", "Stations: leaf rubbings, seed sorting, watering team", "Vocabulary: sprout, stem, petal, roots", "Family tie-in: send a photo of a plant at home"]) }
+    { id: "document-6", centerId: center.id, name: "Garden exploration guide.pdf", category: "curriculum", contentType: "application/pdf", size: 1310, uploadedBy: "Jordan Ellis", uploadedAt: ago(9e3), dataUrl: tinyPdf("Garden Exploration Guide", ["Theme: Little Garden, Big Ideas", "", "Stations: leaf rubbings, seed sorting, watering team", "Vocabulary: sprout, stem, petal, roots", "Family tie-in: send a photo of a plant at home"]) },
+    { id: "document-7", centerId: center.id, name: "Incident report form.pdf", category: "licensing", contentType: "application/pdf", size: 1210, uploadedBy: "Sarah Johnson", uploadedAt: ago(8e4), dataUrl: tinyPdf("Incident / Injury Report", ["Bright Path Learning Center \u2014 License OH-ELC-28491", "Child: ____________________  Date: ________  Time: ______", "", "What happened: _________________________________________", "First aid given: ________________________________________", "Staff witness: __________________  Parent notified: _____", "Staff signature: ________________  Parent signature: ____"]) },
+    { id: "document-8", centerId: center.id, name: "Medication authorization form.pdf", category: "licensing", contentType: "application/pdf", size: 1180, uploadedBy: "Sarah Johnson", uploadedAt: ago(85e3), dataUrl: tinyPdf("Medication Authorization", ["Bright Path Learning Center", "Child: ____________________  DOB: ____________", "", "Medication: ____________  Dose: ______  Times: ________", "Prescriber: ____________  Phone: _____________________", "Parent authorization signature: _______________________", "Two-staff verification required for every administration."]) }
   ];
-  return { center, users, classrooms, children, activities, messages, invoices, curriculum, enrollments, events, meals, cacfpClaims, documents, attendanceLog };
+  const inspections = [
+    { id: "inspection-1", centerId: center.id, date: ahead(-160), type: "renewal", inspector: "M. Alvarez, ODJFS", status: "passed", findings: 0, notes: "License renewed with no findings." },
+    { id: "inspection-2", centerId: center.id, date: ahead(-45), type: "annual", inspector: "D. Okafor, ODJFS", status: "findings", findings: 2, notes: "Two low-risk findings cited; corrective action plan submitted." },
+    { id: "inspection-3", centerId: center.id, date: ahead(21), type: "monitoring", inspector: "D. Okafor, ODJFS", status: "scheduled", findings: 0, notes: "Routine monitoring visit \u2014 verify corrective actions." }
+  ];
+  const complaints = [
+    { id: "complaint-1", centerId: center.id, receivedOn: ahead(-70), source: "parent", summary: "Concern about pickup-line supervision during afternoon dismissal.", status: "resolved", resolution: "Added a second staff member to dismissal duty; parent notified and satisfied." },
+    { id: "complaint-2", centerId: center.id, receivedOn: ahead(-9), source: "anonymous", summary: "Report that the infant room briefly exceeded ratio on a Friday afternoon.", status: "investigating", resolution: "" }
+  ];
+  const violations = [
+    { id: "violation-1", centerId: center.id, code: "5101:2-12-22", description: "Medication log missing second-staff verification signature for two entries.", severity: "low", citedOn: ahead(-45), status: "verified", inspectionId: "inspection-2" },
+    { id: "violation-2", centerId: center.id, code: "5101:2-12-15", description: "Playground resilient surfacing depth below required 9 inches under climber.", severity: "moderate", citedOn: ahead(-45), status: "open", inspectionId: "inspection-2" }
+  ];
+  const correctiveActions = [
+    { id: "action-1", centerId: center.id, violationId: "violation-1", description: "Retrain all staff on two-signature medication logging; audit logs weekly.", assignedTo: "Sarah Johnson", dueDate: ahead(-20), status: "verified", completedOn: ahead(-25) },
+    { id: "action-2", centerId: center.id, violationId: "violation-2", description: "Top up engineered wood fiber under climber to 9-inch depth and document measurement.", assignedTo: "Jordan Ellis", dueDate: ahead(10), status: "in_progress" }
+  ];
+  const drills = [
+    { id: "drill-1", centerId: center.id, type: "fire", date: ahead(-36), timeOfDay: "10:15 AM", durationMinutes: 4, participants: 19, conductedBy: "Sarah Johnson", notes: "Full evacuation in under 4 minutes." },
+    { id: "drill-2", centerId: center.id, type: "fire", date: ahead(-66), timeOfDay: "9:40 AM", durationMinutes: 5, participants: 21, conductedBy: "Jordan Ellis" },
+    { id: "drill-3", centerId: center.id, type: "tornado", date: ahead(-50), timeOfDay: "11:00 AM", durationMinutes: 8, participants: 20, conductedBy: "Sarah Johnson", notes: "Shelter positions reviewed with new staff." },
+    { id: "drill-4", centerId: center.id, type: "lockdown", date: ahead(-80), timeOfDay: "2:30 PM", durationMinutes: 12, participants: 18, conductedBy: "Amara Wilson" },
+    { id: "drill-5", centerId: center.id, type: "evacuation", date: ahead(-140), timeOfDay: "10:00 AM", durationMinutes: 15, participants: 22, conductedBy: "Sarah Johnson", notes: "Walked to the designated off-site meeting point." }
+  ];
+  const complianceChecks = [
+    { id: "check-1", centerId: center.id, category: "monitoring", item: "Daily attendance records complete and signed", status: "compliant", lastChecked: ahead(-3) },
+    { id: "check-2", centerId: center.id, category: "monitoring", item: "Staff/child ratio logs current for all classrooms", status: "compliant", lastChecked: ahead(-3) },
+    { id: "check-3", centerId: center.id, category: "monitoring", item: "Medication administration logs double-signed", status: "compliant", lastChecked: ahead(-6) },
+    { id: "check-4", centerId: center.id, category: "monitoring", item: "Child files audited (immunizations, contacts, physicals)", status: "action_needed", lastChecked: ahead(-31) },
+    { id: "check-5", centerId: center.id, category: "monitoring", item: "Staff files audited (credentials, background checks)", status: "compliant", lastChecked: ahead(-12) },
+    { id: "check-6", centerId: center.id, category: "monitoring", item: "Incident reports filed and parent-signed within 24 hours", status: "pending", lastChecked: ahead(-40) },
+    { id: "check-7", centerId: center.id, category: "health_safety", item: "Smoke detectors and fire extinguishers inspected", status: "compliant", lastChecked: ahead(-8) },
+    { id: "check-8", centerId: center.id, category: "health_safety", item: "First aid kits stocked in every classroom and vehicle", status: "compliant", lastChecked: ahead(-8) },
+    { id: "check-9", centerId: center.id, category: "health_safety", item: "Cleaning chemicals locked and out of reach", status: "compliant", lastChecked: ahead(-2) },
+    { id: "check-10", centerId: center.id, category: "health_safety", item: "Playground surfacing depth measured and raked", status: "action_needed", lastChecked: ahead(-15) },
+    { id: "check-11", centerId: center.id, category: "health_safety", item: "Emergency numbers and evacuation maps posted in each room", status: "compliant", lastChecked: ahead(-30) },
+    { id: "check-12", centerId: center.id, category: "health_safety", item: "Daily sanitization schedule completed and initialed", status: "compliant", lastChecked: ahead(-1) }
+  ];
+  return { center, users, classrooms, children, activities, messages, invoices, curriculum, enrollments, events, meals, cacfpClaims, documents, attendanceLog, inspections, complaints, violations, correctiveActions, drills, complianceChecks };
 }
 var current = seed();
 var store = () => current;
@@ -342,6 +382,16 @@ var documentSchema = z.object({ name: z.string().min(1).max(120), category: z.en
 var centerSchema = z.object({ name: z.string().min(1).max(100).optional(), address: z.string().max(160).optional(), phone: z.string().max(30).optional(), license: z.string().max(40).optional(), capacity: z.number().int().min(1).max(500).optional() });
 var invoiceCreateSchema = z.object({ childId: z.string(), amount: z.number().int().min(1).max(1e7), dueDate: z.string().min(8).max(10), description: z.string().min(1).max(120) });
 var recordPaymentSchema = z.object({ method: z.string().min(1).max(60) });
+var inspectionCreateSchema = z.object({ date: z.string().min(8).max(10), type: z.enum(["annual", "renewal", "monitoring", "follow_up", "complaint"]), inspector: z.string().min(1).max(80), status: z.enum(["scheduled", "passed", "findings", "failed"]), findings: z.number().int().min(0).max(200), notes: z.string().max(500) });
+var inspectionUpdateSchema = inspectionCreateSchema.partial();
+var complaintCreateSchema = z.object({ receivedOn: z.string().min(8).max(10), source: z.enum(["parent", "staff", "anonymous", "state"]), summary: z.string().min(1).max(500) });
+var complaintUpdateSchema = z.object({ status: z.enum(["open", "investigating", "resolved", "unfounded"]).optional(), resolution: z.string().max(500).optional() });
+var violationCreateSchema = z.object({ code: z.string().min(1).max(40), description: z.string().min(1).max(400), severity: z.enum(["low", "moderate", "serious"]), citedOn: z.string().min(8).max(10), inspectionId: z.string().optional() });
+var violationUpdateSchema = z.object({ status: z.enum(["open", "corrected", "verified"]) });
+var actionCreateSchema = z.object({ violationId: z.string().optional(), description: z.string().min(1).max(400), assignedTo: z.string().min(1).max(80), dueDate: z.string().min(8).max(10) });
+var actionUpdateSchema = z.object({ status: z.enum(["open", "in_progress", "completed", "verified"]) });
+var drillCreateSchema = z.object({ type: z.enum(["fire", "tornado", "lockdown", "evacuation"]), date: z.string().min(8).max(10), timeOfDay: z.string().min(1).max(20), durationMinutes: z.number().int().min(1).max(240), participants: z.number().int().min(0).max(500), notes: z.string().max(300).optional() });
+var complianceCheckUpdateSchema = z.object({ status: z.enum(["compliant", "action_needed", "pending"]) });
 var uid = (prefix) => `${prefix}-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
 function inCareOf(user, child) {
   if (user.role === "admin") return true;
@@ -384,6 +434,7 @@ function scopedDashboard(user) {
   const enrollments = user.role === "admin" ? data.enrollments : [];
   const meals = user.role === "parent" ? [] : data.meals;
   const cacfpClaims = user.role === "admin" ? data.cacfpClaims : [];
+  const isAdmin = user.role === "admin";
   const documents = user.role === "parent" ? [] : data.documents.map(({ dataUrl: _dataUrl, ...meta }) => meta);
   const attendanceLog = data.attendanceLog.filter((entry) => visibleChildIds.includes(entry.childId));
   return {
@@ -401,6 +452,12 @@ function scopedDashboard(user) {
     cacfpClaims,
     documents,
     attendanceLog,
+    inspections: isAdmin ? data.inspections : [],
+    complaints: isAdmin ? data.complaints : [],
+    violations: isAdmin ? data.violations : [],
+    correctiveActions: isAdmin ? data.correctiveActions : [],
+    drills: isAdmin ? data.drills : [],
+    complianceChecks: isAdmin ? data.complianceChecks : [],
     stats: {
       present: children.filter((child) => child.attendanceStatus === "present").length,
       expected: children.filter((child) => child.attendanceStatus === "expected").length,
@@ -688,6 +745,95 @@ function createApp(broadcast = () => void 0) {
     broadcast("data:updated", { type: "document", id: removed.id });
     const { dataUrl: _dataUrl, ...meta } = removed;
     return res.json(meta);
+  });
+  app2.post("/api/inspections", authenticate, allow("admin"), (req, res) => {
+    const body = parseBody(inspectionCreateSchema, req.body, res);
+    if (!body) return;
+    const inspection = { id: uid("inspection"), centerId: req.user.centerId, ...body };
+    store().inspections.push(inspection);
+    store().inspections.sort((a, b) => b.date.localeCompare(a.date));
+    broadcast("data:updated", { type: "inspection", id: inspection.id });
+    return res.status(201).json(inspection);
+  });
+  app2.patch("/api/inspections/:inspectionId", authenticate, allow("admin"), (req, res) => {
+    const body = parseBody(inspectionUpdateSchema, req.body, res);
+    if (!body) return;
+    const inspection = store().inspections.find((item) => item.id === req.params.inspectionId && item.centerId === req.user.centerId);
+    if (!inspection) return res.status(404).json({ error: "not_found", message: "Inspection not found." });
+    Object.assign(inspection, body);
+    broadcast("data:updated", { type: "inspection", id: inspection.id });
+    return res.json(inspection);
+  });
+  app2.post("/api/complaints", authenticate, allow("admin"), (req, res) => {
+    const body = parseBody(complaintCreateSchema, req.body, res);
+    if (!body) return;
+    const complaint = { id: uid("complaint"), centerId: req.user.centerId, status: "open", resolution: "", ...body };
+    store().complaints.unshift(complaint);
+    broadcast("data:updated", { type: "complaint", id: complaint.id });
+    return res.status(201).json(complaint);
+  });
+  app2.patch("/api/complaints/:complaintId", authenticate, allow("admin"), (req, res) => {
+    const body = parseBody(complaintUpdateSchema, req.body, res);
+    if (!body) return;
+    const complaint = store().complaints.find((item) => item.id === req.params.complaintId && item.centerId === req.user.centerId);
+    if (!complaint) return res.status(404).json({ error: "not_found", message: "Complaint not found." });
+    Object.assign(complaint, body);
+    broadcast("data:updated", { type: "complaint", id: complaint.id });
+    return res.json(complaint);
+  });
+  app2.post("/api/violations", authenticate, allow("admin"), (req, res) => {
+    const body = parseBody(violationCreateSchema, req.body, res);
+    if (!body) return;
+    const violation = { id: uid("violation"), centerId: req.user.centerId, status: "open", ...body };
+    store().violations.unshift(violation);
+    broadcast("data:updated", { type: "violation", id: violation.id });
+    return res.status(201).json(violation);
+  });
+  app2.patch("/api/violations/:violationId", authenticate, allow("admin"), (req, res) => {
+    const body = parseBody(violationUpdateSchema, req.body, res);
+    if (!body) return;
+    const violation = store().violations.find((item) => item.id === req.params.violationId && item.centerId === req.user.centerId);
+    if (!violation) return res.status(404).json({ error: "not_found", message: "Violation not found." });
+    violation.status = body.status;
+    broadcast("data:updated", { type: "violation", id: violation.id });
+    return res.json(violation);
+  });
+  app2.post("/api/corrective-actions", authenticate, allow("admin"), (req, res) => {
+    const body = parseBody(actionCreateSchema, req.body, res);
+    if (!body) return;
+    const action = { id: uid("action"), centerId: req.user.centerId, status: "open", ...body };
+    store().correctiveActions.unshift(action);
+    broadcast("data:updated", { type: "corrective_action", id: action.id });
+    return res.status(201).json(action);
+  });
+  app2.patch("/api/corrective-actions/:actionId", authenticate, allow("admin"), (req, res) => {
+    const body = parseBody(actionUpdateSchema, req.body, res);
+    if (!body) return;
+    const action = store().correctiveActions.find((item) => item.id === req.params.actionId && item.centerId === req.user.centerId);
+    if (!action) return res.status(404).json({ error: "not_found", message: "Corrective action not found." });
+    action.status = body.status;
+    action.completedOn = body.status === "completed" || body.status === "verified" ? action.completedOn ?? today() : void 0;
+    broadcast("data:updated", { type: "corrective_action", id: action.id });
+    return res.json(action);
+  });
+  app2.post("/api/drills", authenticate, allow("admin"), (req, res) => {
+    const body = parseBody(drillCreateSchema, req.body, res);
+    if (!body) return;
+    const drill = { id: uid("drill"), centerId: req.user.centerId, conductedBy: req.user.name, ...body };
+    store().drills.unshift(drill);
+    store().drills.sort((a, b) => b.date.localeCompare(a.date));
+    broadcast("data:updated", { type: "drill", id: drill.id });
+    return res.status(201).json(drill);
+  });
+  app2.patch("/api/compliance-checks/:checkId", authenticate, allow("admin"), (req, res) => {
+    const body = parseBody(complianceCheckUpdateSchema, req.body, res);
+    if (!body) return;
+    const check = store().complianceChecks.find((item) => item.id === req.params.checkId && item.centerId === req.user.centerId);
+    if (!check) return res.status(404).json({ error: "not_found", message: "Checklist item not found." });
+    check.status = body.status;
+    check.lastChecked = today();
+    broadcast("data:updated", { type: "compliance_check", id: check.id });
+    return res.json(check);
   });
   app2.patch("/api/center", authenticate, allow("admin"), (req, res) => {
     const body = parseBody(centerSchema, req.body, res);
