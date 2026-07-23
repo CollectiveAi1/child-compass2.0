@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { io } from 'socket.io-client';
 import { create } from 'zustand';
-import type { ActivityType, AttendanceStatus, ChildMedical, ComplaintStatus, ComplianceCheckStatus, CorrectiveActionStatus, DocumentCategory, DrillType, InspectionStatus, InspectionType, MealType, Message, StaffCredential, ViolationSeverity, ViolationStatus } from '@compass/shared';
+import type { ActivityType, AttendanceStatus, ChildMedical, ComplaintStatus, ComplianceCheckStatus, CorrectiveActionStatus, DocumentCategory, DrillType, InspectionStatus, InspectionType, MealType, Message, StaffCredential, TuitionRates, ViolationSeverity, ViolationStatus } from '@compass/shared';
 import { API_BASE, ApiFailure, api, getDashboard } from '../lib/api';
 import { useSession } from '../lib/session';
 
@@ -73,7 +73,10 @@ export const useUploadDocument = () => useCompassMutation<{ name: string; catego
 export const useDeleteDocument = () => useCompassMutation<{ documentId: string }>(v => `/documents/${v.documentId}`, 'DELETE', () => ({}));
 export const useCreateInvoice = () => useCompassMutation<{ childId: string; amount: number; dueDate: string; description: string }>(() => '/invoices', 'POST', v => v);
 export const useRecordPayment = () => useCompassMutation<{ invoiceId: string; method: string }>(v => `/invoices/${v.invoiceId}/record-payment`, 'POST', ({ invoiceId: _id, ...rest }) => rest);
-export const useUpdateCenter = () => useCompassMutation<{ name?: string; address?: string; phone?: string; license?: string; capacity?: number }>(() => '/center', 'PATCH', v => v);
+export const useUpdateCenter = () => useCompassMutation<{ name?: string; address?: string; phone?: string; license?: string; capacity?: number; autoWeeklyBilling?: boolean }>(() => '/center', 'PATCH', v => v);
+export const useAddClassroom = () => useCompassMutation<{ name: string; ageRange: string; capacity: number; ratioLimit: number; rates: TuitionRates }>(() => '/classrooms', 'POST', v => v);
+export const useUpdateClassroom = () => useCompassMutation<{ classroomId: string; name?: string; ageRange?: string; capacity?: number; ratioLimit?: number; rates?: TuitionRates }>(v => `/classrooms/${v.classroomId}`, 'PATCH', ({ classroomId: _id, ...rest }) => rest);
+export const useRunWeeklyBilling = () => useCompassMutation<Record<string, never>>(() => '/billing/run-weekly', 'POST', () => ({}));
 
 export interface NewInspectionInput { date: string; type: InspectionType; inspector: string; status: InspectionStatus; findings: number; notes: string }
 export const useAddInspection = () => useCompassMutation<NewInspectionInput>(() => '/inspections', 'POST', v => v);

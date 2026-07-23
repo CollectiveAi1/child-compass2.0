@@ -5,6 +5,29 @@
   const db = window.__COMPASS_SEED__;
   const uid = prefix => `${prefix}-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
   const today = () => new Date().toISOString().slice(0, 10);
+  const weekMondayOf = () => {
+    const monday = new Date();
+    monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
+    return monday.toISOString().slice(0, 10);
+  };
+  // Mirrors the server's recurring tuition generator: one invoice per child per
+  // week from their classroom's saved weekly rate, idempotent by description.
+  function runWeeklyBilling(centerId) {
+    const week = weekMondayOf();
+    const dueDate = new Date(`${week}T12:00:00`);
+    dueDate.setDate(dueDate.getDate() + 4);
+    const created = [];
+    for (const child of db.children) {
+      const room = db.classrooms.find(item => item.id === child.classroomId);
+      if (!room || room.rates.weeklyTuition <= 0) continue;
+      const description = `Weekly tuition — ${room.name} (week of ${new Date(`${week}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })})`;
+      if (db.invoices.some(invoice => invoice.childId === child.id && invoice.description === description)) continue;
+      const invoice = { id: uid('invoice'), centerId, guardianId: child.guardianIds[0] || '', childId: child.id, amount: room.rates.weeklyTuition, dueDate: dueDate.toISOString().slice(0, 10), status: 'due', description };
+      db.invoices.push(invoice);
+      created.push(invoice);
+    }
+    return { week, created };
+  }
   const json = (payload, status = 200) => new Response(JSON.stringify(payload), { status, headers: { 'Content-Type': 'application/json' } });
   const notFound = message => json({ error: 'not_found', message }, 404);
   const forbidden = message => json({ error: 'forbidden', message }, 403);
@@ -84,7 +107,10 @@
     if (!user) return json({ error: 'unauthorized', message: 'Please sign in to continue.' }, 401);
 
     if (path === '/auth/me' && method === 'GET') return json({ user });
-    if (path === '/dashboard' && method === 'GET') return json(scopedDashboard(user));
+    if (path === '/dashboard' && method === 'GET') {
+      if (db.center.autoWeeklyBilling) runWeeklyBilling(user.centerId);
+      return json(scopedDashboard(user));
+    }
 
     let match;
     if ((match = path.match(/^\/attendance\/([^/]+)$/)) && method === 'PATCH') {
@@ -160,6 +186,10 @@
         medical: { physician: '', physicianPhone: '', conditions: (body.allergies || []).length ? `Allergy: ${body.allergies.join(', ')}` : 'None reported', medications: 'None', lastPhysical: '', immunizations: [], emergencyContacts: body.guardianName ? [{ name: body.guardianName, relation: 'Parent', phone: body.guardianPhone || '' }] : [] },
       };
       db.children.push(child);
+      if (classroom.rates.registrationFee > 0) {
+        const due = new Date(); due.setDate(due.getDate() + 14);
+        db.invoices.push({ id: uid('invoice'), centerId: user.centerId, guardianId: '', childId: child.id, amount: classroom.rates.registrationFee, dueDate: due.toISOString().slice(0, 10), status: 'due', description: `Registration fee — ${classroom.name}` });
+      }
       return json(child, 201);
     }
     if ((match = path.match(/^\/children\/([^/]+)$/)) && method === 'PATCH') {
@@ -255,6 +285,22 @@
       return json(db.center);
     }
     if (user.role === 'admin') {
+      if (path === '/classrooms' && method === 'POST') {
+        const palette = ['#f2789f', '#14b8a6', '#5a8dee', '#8b5cf6', '#f59e0b', '#22c55e'];
+        const room = { id: uid('room'), centerId: user.centerId, teacherIds: [], color: palette[db.classrooms.length % palette.length], ...body };
+        db.classrooms.push(room);
+        return json(room, 201);
+      }
+      if ((match = path.match(/^\/classrooms\/([^/]+)$/)) && method === 'PATCH') {
+        const room = db.classrooms.find(item => item.id === match[1]);
+        if (!room) return notFound('Classroom not found.');
+        Object.assign(room, body);
+        return json(room);
+      }
+      if (path === '/billing/run-weekly' && method === 'POST') {
+        const { week, created } = runWeeklyBilling(user.centerId);
+        return json({ week, created: created.length });
+      }
       if (path === '/inspections' && method === 'POST') {
         const inspection = { id: uid('inspection'), centerId: user.centerId, ...body };
         db.inspections.push(inspection);

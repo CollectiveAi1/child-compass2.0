@@ -4,6 +4,7 @@
 import express from "express";
 import cors from "cors";
 import { z } from "zod";
+import { weekMondayOf } from "@compass/shared";
 
 // apps/api/src/auth.ts
 import jwt from "jsonwebtoken";
@@ -83,7 +84,8 @@ function seed() {
     address: "1840 Meadow Lane, Columbus, OH",
     phone: "(614) 555-0184",
     license: "OH-ELC-28491",
-    capacity: 48
+    capacity: 48,
+    autoWeeklyBilling: false
   };
   const users = [
     { id: "user-admin", centerId: center.id, name: "Sarah Johnson", email: "admin@compass.demo", role: "admin", avatar: "SJ", classroomIds: [], childIds: [], title: "Director", phone: "(614) 555-0100", hiredOn: "2019-08-12", credentials: [{ name: "Administrator License", issued: "2019-08-01", expires: ahead(320) }, { name: "CPR & First Aid", issued: ahead(-540), expires: ahead(190) }] },
@@ -95,9 +97,9 @@ function seed() {
     { id: "user-parent-2", centerId: center.id, name: "Priya Shah", email: "priya@compass.demo", role: "parent", avatar: "PS", classroomIds: [], childIds: ["child-2"] }
   ];
   const classrooms = [
-    { id: "room-sunbeams", centerId: center.id, name: "Sunbeam Studio", ageRange: "2\u20133 years", color: "#f2789f", capacity: 12, ratioLimit: 6, teacherIds: ["user-teacher", "user-teacher-2"] },
-    { id: "room-meadow", centerId: center.id, name: "Meadow Makers", ageRange: "3\u20135 years", color: "#14b8a6", capacity: 18, ratioLimit: 9, teacherIds: ["user-teacher-3"] },
-    { id: "room-nest", centerId: center.id, name: "Cozy Nest", ageRange: "6\u201324 months", color: "#5a8dee", capacity: 8, ratioLimit: 4, teacherIds: ["user-teacher-4"] }
+    { id: "room-sunbeams", centerId: center.id, name: "Sunbeam Studio", ageRange: "2\u20133 years", color: "#f2789f", capacity: 12, ratioLimit: 6, teacherIds: ["user-teacher", "user-teacher-2"], rates: { registrationFee: 15e3, weeklyTuition: 31e3, lateFee: 2500, miscFee: 1500 } },
+    { id: "room-meadow", centerId: center.id, name: "Meadow Makers", ageRange: "3\u20135 years", color: "#14b8a6", capacity: 18, ratioLimit: 9, teacherIds: ["user-teacher-3"], rates: { registrationFee: 15e3, weeklyTuition: 28500, lateFee: 2500, miscFee: 1500 } },
+    { id: "room-nest", centerId: center.id, name: "Cozy Nest", ageRange: "6\u201324 months", color: "#5a8dee", capacity: 8, ratioLimit: 4, teacherIds: ["user-teacher-4"], rates: { registrationFee: 17500, weeklyTuition: 36500, lateFee: 2500, miscFee: 1500 } }
   ];
   const childSeeds = [
     ["child-1", "room-sunbeams", "Mia", "Morgan", "2023-09-14", "present", "sun"],
@@ -379,7 +381,10 @@ var staffUpdateSchema = z.object({ title: z.string().max(60).optional(), phone: 
 var mealSchema = z.object({ date: z.string().min(8).max(10), meal: z.enum(["breakfast", "lunch", "snack"]), childCount: z.number().int().min(0).max(500), adultCount: z.number().int().min(0).max(100) });
 var eventSchema = z.object({ title: z.string().min(1).max(120), date: z.string().min(8).max(10), time: z.string().max(40).optional(), detail: z.string().max(300).optional(), attendees: z.number().int().min(0).max(1e3).optional() });
 var documentSchema = z.object({ name: z.string().min(1).max(120), category: z.enum(["attendance", "financial", "medical", "enrollment", "licensing", "curriculum", "other"]), contentType: z.string().min(1).max(100), size: z.number().int().min(0), dataUrl: z.string().startsWith("data:").max(42e5) });
-var centerSchema = z.object({ name: z.string().min(1).max(100).optional(), address: z.string().max(160).optional(), phone: z.string().max(30).optional(), license: z.string().max(40).optional(), capacity: z.number().int().min(1).max(500).optional() });
+var centerSchema = z.object({ name: z.string().min(1).max(100).optional(), address: z.string().max(160).optional(), phone: z.string().max(30).optional(), license: z.string().max(40).optional(), capacity: z.number().int().min(1).max(500).optional(), autoWeeklyBilling: z.boolean().optional() });
+var ratesSchema = z.object({ registrationFee: z.number().int().min(0).max(1e7), weeklyTuition: z.number().int().min(0).max(1e7), lateFee: z.number().int().min(0).max(1e7), miscFee: z.number().int().min(0).max(1e7) });
+var classroomCreateSchema = z.object({ name: z.string().min(1).max(60), ageRange: z.string().min(1).max(40), color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(), capacity: z.number().int().min(1).max(100), ratioLimit: z.number().int().min(1).max(30), rates: ratesSchema });
+var classroomUpdateSchema = z.object({ name: z.string().min(1).max(60).optional(), ageRange: z.string().min(1).max(40).optional(), color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(), capacity: z.number().int().min(1).max(100).optional(), ratioLimit: z.number().int().min(1).max(30).optional(), rates: ratesSchema.optional() });
 var invoiceCreateSchema = z.object({ childId: z.string(), amount: z.number().int().min(1).max(1e7), dueDate: z.string().min(8).max(10), description: z.string().min(1).max(120) });
 var recordPaymentSchema = z.object({ method: z.string().min(1).max(60) });
 var inspectionCreateSchema = z.object({ date: z.string().min(8).max(10), type: z.enum(["annual", "renewal", "monitoring", "follow_up", "complaint"]), inspector: z.string().min(1).max(80), status: z.enum(["scheduled", "passed", "findings", "failed"]), findings: z.number().int().min(0).max(200), notes: z.string().max(500) });
@@ -408,6 +413,23 @@ function syncTodayAttendanceLog(child) {
   const entry = { id: `attendance-${today()}-${child.id}`, centerId: child.centerId, childId: child.id, date: today(), status: "present", checkedInAt: child.checkedInAt, checkedOutAt: child.checkedOutAt };
   if (index >= 0) log[index] = entry;
   else log.push(entry);
+}
+function runWeeklyBilling(centerId) {
+  const data = store();
+  const week = weekMondayOf();
+  const dueDate = /* @__PURE__ */ new Date(`${week}T12:00:00`);
+  dueDate.setDate(dueDate.getDate() + 4);
+  const created = [];
+  for (const child of data.children.filter((item) => item.centerId === centerId)) {
+    const room = data.classrooms.find((item) => item.id === child.classroomId);
+    if (!room || room.rates.weeklyTuition <= 0) continue;
+    const description = `Weekly tuition \u2014 ${room.name} (week of ${(/* @__PURE__ */ new Date(`${week}T12:00:00`)).toLocaleDateString("en-US", { month: "short", day: "numeric" })})`;
+    if (data.invoices.some((invoice2) => invoice2.childId === child.id && invoice2.description === description)) continue;
+    const invoice = { id: uid("invoice"), centerId, guardianId: child.guardianIds[0] ?? "", childId: child.id, amount: room.rates.weeklyTuition, dueDate: dueDate.toISOString().slice(0, 10), status: "due", description };
+    data.invoices.push(invoice);
+    created.push(invoice);
+  }
+  return { week, created };
 }
 function parseBody(schema, body, res) {
   const parsed = schema.safeParse(body);
@@ -483,7 +505,13 @@ function createApp(broadcast = () => void 0) {
     return res.json({ token: signUser(user), user });
   });
   app2.get("/api/auth/me", authenticate, (req, res) => res.json({ user: req.user }));
-  app2.get("/api/dashboard", authenticate, (req, res) => res.json(scopedDashboard(req.user)));
+  app2.get("/api/dashboard", authenticate, (req, res) => {
+    if (store().center.autoWeeklyBilling) {
+      const { created } = runWeeklyBilling(req.user.centerId);
+      if (created.length) broadcast("invoice:updated", { generated: created.length });
+    }
+    return res.json(scopedDashboard(req.user));
+  });
   app2.patch("/api/attendance/:childId", authenticate, allow("admin", "teacher"), (req, res) => {
     const body = parseBody(attendanceSchema, req.body, res);
     if (!body) return;
@@ -594,6 +622,11 @@ function createApp(broadcast = () => void 0) {
       medical: { physician: "", physicianPhone: "", conditions: body.allergies?.length ? `Allergy: ${body.allergies.join(", ")}` : "None reported", medications: "None", lastPhysical: "", immunizations: [], emergencyContacts: body.guardianName ? [{ name: body.guardianName, relation: "Parent", phone: body.guardianPhone ?? "" }] : [] }
     };
     store().children.push(child);
+    if (classroom.rates.registrationFee > 0) {
+      const due = /* @__PURE__ */ new Date();
+      due.setDate(due.getDate() + 14);
+      store().invoices.push({ id: uid("invoice"), centerId: req.user.centerId, guardianId: "", childId: child.id, amount: classroom.rates.registrationFee, dueDate: due.toISOString().slice(0, 10), status: "due", description: `Registration fee \u2014 ${classroom.name}` });
+    }
     broadcast("data:updated", { type: "child", id: child.id });
     return res.status(201).json(child);
   });
@@ -834,6 +867,29 @@ function createApp(broadcast = () => void 0) {
     check.lastChecked = today();
     broadcast("data:updated", { type: "compliance_check", id: check.id });
     return res.json(check);
+  });
+  app2.post("/api/classrooms", authenticate, allow("admin"), (req, res) => {
+    const body = parseBody(classroomCreateSchema, req.body, res);
+    if (!body) return;
+    const palette = ["#f2789f", "#14b8a6", "#5a8dee", "#8b5cf6", "#f59e0b", "#22c55e"];
+    const room = { id: uid("room"), centerId: req.user.centerId, teacherIds: [], color: body.color ?? palette[store().classrooms.length % palette.length], ...body };
+    store().classrooms.push(room);
+    broadcast("data:updated", { type: "classroom", id: room.id });
+    return res.status(201).json(room);
+  });
+  app2.patch("/api/classrooms/:classroomId", authenticate, allow("admin"), (req, res) => {
+    const body = parseBody(classroomUpdateSchema, req.body, res);
+    if (!body) return;
+    const room = store().classrooms.find((item) => item.id === req.params.classroomId && item.centerId === req.user.centerId);
+    if (!room) return res.status(404).json({ error: "not_found", message: "Classroom not found." });
+    Object.assign(room, body);
+    broadcast("data:updated", { type: "classroom", id: room.id });
+    return res.json(room);
+  });
+  app2.post("/api/billing/run-weekly", authenticate, allow("admin"), (req, res) => {
+    const { week, created } = runWeeklyBilling(req.user.centerId);
+    if (created.length) broadcast("invoice:updated", { generated: created.length });
+    return res.json({ week, created: created.length });
   });
   app2.patch("/api/center", authenticate, allow("admin"), (req, res) => {
     const body = parseBody(centerSchema, req.body, res);

@@ -425,6 +425,29 @@ h1,h2,h3,p{margin-top:0}h1,h2,h3,.logo-lockup{font-family:'Nunito','DM Sans',san
 .payment-summary h2{font-size:30px;margin:0}
 .payment-summary small{font-size:11.5px;color:#7c8ba0}
 
+/* Billing: classroom rates & recurring tuition */
+.rate-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:13px}
+.rate-card{border:1px solid var(--line);border-radius:15px;background:#fbfcfe;padding:15px;display:grid;gap:12px;align-content:start}
+.rate-card>header{display:flex;align-items:center;gap:10px}
+.rate-card h3{font-size:14.5px;margin:0}
+.rate-card>header small{font-size:11px;color:#7c8ba0}
+.rate-card dl{display:grid;gap:6px;margin:0}
+.rate-card dl>div{display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:6px 9px;border-radius:9px;background:#fff;border:1px solid #eef2f7}
+.rate-card dt{font-size:11px;color:#64748b;font-weight:600}
+.rate-card dd{margin:0;font-size:13px;font-weight:800;color:#22314a}
+.rate-card .rate-primary{background:#eef8f6;border-color:#c9ece6}
+.rate-card .rate-primary dt{color:#0d7d70}
+.rate-card .rate-primary dd{color:#0d7d70}
+.rate-card .button{justify-self:start}
+.recurring-panel>header{align-items:center}
+.toggle-chip{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:999px;padding:9px 13px;background:#fff;font-size:12.5px;font-weight:700;color:#42536b;cursor:pointer}
+.toggle-chip input{appearance:none;width:34px;height:19px;border-radius:10px;background:#cbd5e1;position:relative;transition:background .15s;cursor:pointer;margin:0}
+.toggle-chip input:before{content:'';position:absolute;left:2px;top:2px;width:15px;height:15px;border-radius:50%;background:#fff;transition:left .15s}
+.toggle-chip input:checked{background:var(--teal)}
+.toggle-chip input:checked:before{left:17px}
+.recurring-progress{height:9px;border-radius:9px;background:#eef2f7;overflow:hidden;margin:4px 0 10px}
+.recurring-progress i{display:block;height:100%;background:var(--teal);border-radius:9px}
+
 /* CACFP */
 .meal-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:18px}
 .meal-card{padding:18px}
