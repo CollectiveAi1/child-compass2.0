@@ -205,6 +205,13 @@
       db.enrollments.unshift(application);
       return json(application, 201);
     }
+    if ((match = path.match(/^\/enrollments\/([^/]+)\/children$/)) && method === 'POST' && user.role === 'admin') {
+      const application = db.enrollments.find(item => item.id === match[1]);
+      if (!application) return notFound('Application not found.');
+      if (application.status === 'enrolled' || application.status === 'declined') return json({ error: 'conflict', message: 'This application is closed — start a new one for this family.' }, 409);
+      application.children.push(body);
+      return json(application, 201);
+    }
     if ((match = path.match(/^\/enrollments\/([^/]+)$/)) && method === 'PATCH' && user.role === 'admin') {
       const application = db.enrollments.find(item => item.id === match[1]);
       if (!application) return notFound('Application not found.');
@@ -212,14 +219,22 @@
       if (body.status && body.status !== application.status) {
         application.status = body.status;
         if (body.status === 'enrolled') {
-          const [firstName, ...rest] = application.childName.split(' ');
-          db.children.push({
-            id: uid('child'), centerId: user.centerId, classroomId: application.classroomId, guardianIds: [],
-            firstName: firstName || application.childName, lastName: rest.join(' ') || '—', birthday: application.birthday, avatar: 'mint',
-            allergies: [], notes: 'Newly enrolled — welcome packet in progress.', attendanceStatus: 'expected',
-            authorizedPickup: [application.guardianName], enrolledOn: today(), guardianName: application.guardianName, guardianPhone: application.guardianPhone,
-            medical: { physician: '', physicianPhone: '', conditions: 'None reported', medications: 'None', lastPhysical: '', immunizations: [], emergencyContacts: [{ name: application.guardianName, relation: 'Parent', phone: application.guardianPhone }] },
-          });
+          for (const enrollee of application.children) {
+            const [firstName, ...rest] = enrollee.name.split(' ');
+            const child = {
+              id: uid('child'), centerId: user.centerId, classroomId: enrollee.classroomId, guardianIds: [],
+              firstName: firstName || enrollee.name, lastName: rest.join(' ') || '—', birthday: enrollee.birthday, avatar: 'mint',
+              allergies: [], notes: 'Newly enrolled — welcome packet in progress.', attendanceStatus: 'expected',
+              authorizedPickup: [application.guardianName], enrolledOn: today(), guardianName: application.guardianName, guardianPhone: application.guardianPhone,
+              medical: { physician: '', physicianPhone: '', conditions: 'None reported', medications: 'None', lastPhysical: '', immunizations: [], emergencyContacts: [{ name: application.guardianName, relation: 'Parent', phone: application.guardianPhone }] },
+            };
+            db.children.push(child);
+            const room = db.classrooms.find(item => item.id === enrollee.classroomId);
+            if (room && room.rates.registrationFee > 0) {
+              const due = new Date(); due.setDate(due.getDate() + 14);
+              db.invoices.push({ id: uid('invoice'), centerId: user.centerId, guardianId: '', childId: child.id, amount: room.rates.registrationFee, dueDate: due.toISOString().slice(0, 10), status: 'due', description: `Registration fee — ${room.name}` });
+            }
+          }
         }
       }
       return json(application);
