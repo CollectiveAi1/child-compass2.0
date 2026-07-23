@@ -128,18 +128,38 @@ describe('Child Care Compass API', () => {
     expect(dashboard.body.children.some((child: { id: string }) => child.id === created.body.id)).toBe(true);
   });
 
-  it('creates a child record when an application is marked enrolled', async () => {
+  it('keeps siblings on one family file and enrolls them all together', async () => {
     const { app } = createApp();
     const token = await login(app, 'admin@compass.demo');
-    const before = (await request(app).get('/api/dashboard').set('Authorization', `Bearer ${token}`)).body.children.length;
+    // The Bell family application starts with two children; a third sibling
+    // joins the same file instead of a new application.
+    const appended = await request(app)
+      .post('/api/enrollments/enrollment-1/children')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ name: 'Henry Bell', birthday: '2022-06-15', classroomId: 'room-meadow' });
+    expect(appended.status).toBe(201);
+    expect(appended.body.children).toHaveLength(3);
+
+    const before = (await request(app).get('/api/dashboard').set('Authorization', `Bearer ${token}`)).body;
     const response = await request(app)
       .patch('/api/enrollments/enrollment-1')
       .set('Authorization', `Bearer ${token}`)
       .send({ status: 'enrolled' });
     expect(response.status).toBe(200);
-    expect(response.body.status).toBe('enrolled');
-    const after = (await request(app).get('/api/dashboard').set('Authorization', `Bearer ${token}`)).body.children.length;
-    expect(after).toBe(before + 1);
+    const after = (await request(app).get('/api/dashboard').set('Authorization', `Bearer ${token}`)).body;
+    expect(after.children.length).toBe(before.children.length + 3);
+    const bells = after.children.filter((child: { lastName: string }) => child.lastName === 'Bell');
+    expect(bells).toHaveLength(3);
+    expect(new Set(bells.map((child: { guardianName: string }) => child.guardianName))).toEqual(new Set(['Jamie Bell']));
+    // Each enrolled sibling is billed their room's registration fee.
+    const registrations = after.invoices.filter((invoice: { childId: string; description: string }) => bells.some((child: { id: string }) => child.id === invoice.childId) && invoice.description.startsWith('Registration fee'));
+    expect(registrations).toHaveLength(3);
+    // Closed applications no longer accept new children.
+    const closed = await request(app)
+      .post('/api/enrollments/enrollment-1/children')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ name: 'Late Bell', birthday: '2024-01-01', classroomId: 'room-nest' });
+    expect(closed.status).toBe(409);
   });
 
   it('records a manual payment against an invoice', async () => {

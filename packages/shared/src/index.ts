@@ -141,15 +141,21 @@ export interface Invoice {
 
 export type EnrollmentStatus = 'inquiry' | 'toured' | 'waitlist' | 'approved' | 'enrolled' | 'declined';
 
+export interface EnrollmentChild {
+  name: string;
+  birthday: string;
+  classroomId: string;
+}
+
+// One application is a family file: siblings live on the same application, so
+// adding another child never restarts the enrollment process.
 export interface EnrollmentApplication {
   id: string;
   centerId: string;
-  childName: string;
-  birthday: string;
   guardianName: string;
   guardianEmail: string;
   guardianPhone: string;
-  classroomId: string;
+  children: EnrollmentChild[];
   requestedStart: string;
   status: EnrollmentStatus;
   notes: string;

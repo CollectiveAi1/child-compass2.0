@@ -57,10 +57,14 @@ export function medicalReport(data: DashboardData): ReportTable {
 }
 
 export function enrollmentReport(data: DashboardData): ReportTable {
+  const totalChildren = data.enrollments.reduce((sum, application) => sum + application.children.length, 0);
   return {
-    title: 'Enrollment Applications', subtitle: `${data.enrollments.length} applications in the pipeline`,
-    columns: ['Child', 'Birthday', 'Guardian', 'Email', 'Phone', 'Requested room', 'Requested start', 'Status', 'Notes'],
-    rows: data.enrollments.map(application => [application.childName, fmtDate(application.birthday), application.guardianName, application.guardianEmail, application.guardianPhone, roomName(data, application.classroomId), fmtDate(application.requestedStart), application.status, application.notes]),
+    title: 'Enrollment Applications', subtitle: `${data.enrollments.length} family applications · ${totalChildren} children`,
+    columns: ['Family / Guardian', 'Child', 'Birthday', 'Requested room', 'Email', 'Phone', 'Requested start', 'Status', 'Notes'],
+    rows: data.enrollments.flatMap(application => application.children.map((child, index) => [
+      index === 0 ? application.guardianName : `— ${application.guardianName} family`, child.name, fmtDate(child.birthday), roomName(data, child.classroomId),
+      application.guardianEmail, application.guardianPhone, fmtDate(application.requestedStart), application.status, index === 0 ? application.notes : '',
+    ])),
   };
 }
 

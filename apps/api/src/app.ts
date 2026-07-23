@@ -26,9 +26,10 @@ const childUpdateSchema = z.object({
   guardianName: z.string().max(80).optional(), guardianPhone: z.string().max(30).optional(), allergies: z.array(z.string().max(40)).max(12).optional(),
   notes: z.string().max(400).optional(), authorizedPickup: z.array(z.string().max(80)).max(8).optional(), medical: medicalSchema.optional(),
 });
+const enrollmentChildSchema = z.object({ name: z.string().min(1).max(80), birthday: z.string().min(4).max(20), classroomId: z.string() });
 const enrollmentCreateSchema = z.object({
-  childName: z.string().min(1).max(80), birthday: z.string().min(4).max(20), guardianName: z.string().min(1).max(80), guardianEmail: z.string().email(),
-  guardianPhone: z.string().max(30), classroomId: z.string(), requestedStart: z.string().max(20), notes: z.string().max(400).optional(),
+  guardianName: z.string().min(1).max(80), guardianEmail: z.string().email(), guardianPhone: z.string().max(30),
+  children: z.array(enrollmentChildSchema).min(1).max(8), requestedStart: z.string().max(20), notes: z.string().max(400).optional(),
 });
 const enrollmentUpdateSchema = z.object({ status: z.enum(['inquiry', 'toured', 'waitlist', 'approved', 'enrolled', 'declined']).optional(), notes: z.string().max(400).optional() });
 const credentialSchema = z.object({ name: z.string().min(1).max(80), issued: z.string().max(20), expires: z.string().max(20) });
@@ -299,9 +300,22 @@ export function createApp(broadcast: Broadcast = () => undefined) {
   app.post('/api/enrollments', authenticate, allow('admin'), (req: AuthRequest, res) => {
     const body = parseBody(enrollmentCreateSchema, req.body, res);
     if (!body) return;
-    if (!store().classrooms.some(room => room.id === body.classroomId && room.centerId === req.user!.centerId)) return res.status(404).json({ error: 'not_found', message: 'Classroom not found.' });
+    if (!body.children.every(child => store().classrooms.some(room => room.id === child.classroomId && room.centerId === req.user!.centerId))) return res.status(404).json({ error: 'not_found', message: 'Classroom not found.' });
     const application: EnrollmentApplication = { id: uid('enrollment'), centerId: req.user!.centerId, status: 'inquiry', submittedAt: new Date().toISOString(), notes: body.notes ?? '', ...body };
     store().enrollments.unshift(application);
+    broadcast('data:updated', { type: 'enrollment', id: application.id });
+    return res.status(201).json(application);
+  });
+
+  // A sibling joins the family's existing application instead of starting a new one.
+  app.post('/api/enrollments/:enrollmentId/children', authenticate, allow('admin'), (req: AuthRequest, res) => {
+    const body = parseBody(enrollmentChildSchema, req.body, res);
+    if (!body) return;
+    const application = store().enrollments.find(item => item.id === req.params.enrollmentId && item.centerId === req.user!.centerId);
+    if (!application) return res.status(404).json({ error: 'not_found', message: 'Application not found.' });
+    if (application.status === 'enrolled' || application.status === 'declined') return res.status(409).json({ error: 'conflict', message: 'This application is closed — start a new one for this family.' });
+    if (!store().classrooms.some(room => room.id === body.classroomId && room.centerId === req.user!.centerId)) return res.status(404).json({ error: 'not_found', message: 'Classroom not found.' });
+    application.children.push(body);
     broadcast('data:updated', { type: 'enrollment', id: application.id });
     return res.status(201).json(application);
   });
@@ -314,17 +328,26 @@ export function createApp(broadcast: Broadcast = () => undefined) {
     if (body.notes !== undefined) application.notes = body.notes;
     if (body.status && body.status !== application.status) {
       application.status = body.status;
-      // Enrolling an approved family creates their child record in the requested room.
+      // Enrolling the family creates a record for every child on the
+      // application, each in their requested room, billed their room's
+      // registration fee, and all sharing the same guardian file.
       if (body.status === 'enrolled') {
-        const [firstName, ...rest] = application.childName.split(' ');
-        const child: Child = {
-          id: uid('child'), centerId: req.user!.centerId, classroomId: application.classroomId, guardianIds: [],
-          firstName: firstName || application.childName, lastName: rest.join(' ') || '—', birthday: application.birthday, avatar: 'mint',
-          allergies: [], notes: 'Newly enrolled — welcome packet in progress.', attendanceStatus: 'expected',
-          authorizedPickup: [application.guardianName], enrolledOn: today(), guardianName: application.guardianName, guardianPhone: application.guardianPhone,
-          medical: { physician: '', physicianPhone: '', conditions: 'None reported', medications: 'None', lastPhysical: '', immunizations: [], emergencyContacts: [{ name: application.guardianName, relation: 'Parent', phone: application.guardianPhone }] },
-        };
-        store().children.push(child);
+        for (const enrollee of application.children) {
+          const [firstName, ...rest] = enrollee.name.split(' ');
+          const child: Child = {
+            id: uid('child'), centerId: req.user!.centerId, classroomId: enrollee.classroomId, guardianIds: [],
+            firstName: firstName || enrollee.name, lastName: rest.join(' ') || '—', birthday: enrollee.birthday, avatar: 'mint',
+            allergies: [], notes: 'Newly enrolled — welcome packet in progress.', attendanceStatus: 'expected',
+            authorizedPickup: [application.guardianName], enrolledOn: today(), guardianName: application.guardianName, guardianPhone: application.guardianPhone,
+            medical: { physician: '', physicianPhone: '', conditions: 'None reported', medications: 'None', lastPhysical: '', immunizations: [], emergencyContacts: [{ name: application.guardianName, relation: 'Parent', phone: application.guardianPhone }] },
+          };
+          store().children.push(child);
+          const room = store().classrooms.find(item => item.id === enrollee.classroomId);
+          if (room && room.rates.registrationFee > 0) {
+            const due = new Date(); due.setDate(due.getDate() + 14);
+            store().invoices.push({ id: uid('invoice'), centerId: req.user!.centerId, guardianId: '', childId: child.id, amount: room.rates.registrationFee, dueDate: due.toISOString().slice(0, 10), status: 'due', description: `Registration fee — ${room.name}` });
+          }
+        }
       }
     }
     broadcast('data:updated', { type: 'enrollment', id: application.id });

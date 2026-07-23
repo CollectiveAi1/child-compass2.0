@@ -186,10 +186,10 @@ function seed() {
     ] }
   ];
   const enrollments = [
-    { id: "enrollment-1", centerId: center.id, childName: "Harper Bell", birthday: "2023-04-11", guardianName: "Jamie Bell", guardianEmail: "jamie.bell@example.com", guardianPhone: "(614) 555-0301", classroomId: "room-sunbeams", requestedStart: ahead(21), status: "approved", notes: "Tour completed. Paperwork returned \u2014 ready to enroll.", submittedAt: ago(12e3) },
-    { id: "enrollment-2", centerId: center.id, childName: "Mateo Cruz", birthday: "2021-12-02", guardianName: "Ana Cruz", guardianEmail: "ana.cruz@example.com", guardianPhone: "(614) 555-0302", classroomId: "room-meadow", requestedStart: ahead(35), status: "toured", notes: "Family visited Tuesday. Comparing two centers.", submittedAt: ago(20500) },
-    { id: "enrollment-3", centerId: center.id, childName: "Willow James", birthday: "2024-09-27", guardianName: "Morgan James", guardianEmail: "morgan.james@example.com", guardianPhone: "(614) 555-0303", classroomId: "room-nest", requestedStart: ahead(14), status: "waitlist", notes: "Infant room at ratio \u2014 first on waitlist.", submittedAt: ago(3e4) },
-    { id: "enrollment-4", centerId: center.id, childName: "Finn OConnor", birthday: "2022-07-19", guardianName: "Casey OConnor", guardianEmail: "casey.oconnor@example.com", guardianPhone: "(614) 555-0304", classroomId: "room-meadow", requestedStart: ahead(45), status: "inquiry", notes: "Found us through the parent fair. Wants a tour next week.", submittedAt: ago(3100) }
+    { id: "enrollment-1", centerId: center.id, guardianName: "Jamie Bell", guardianEmail: "jamie.bell@example.com", guardianPhone: "(614) 555-0301", children: [{ name: "Harper Bell", birthday: "2023-04-11", classroomId: "room-sunbeams" }, { name: "Hazel Bell", birthday: "2025-02-08", classroomId: "room-nest" }], requestedStart: ahead(21), status: "approved", notes: "Tour completed. Both girls start together \u2014 paperwork returned, ready to enroll.", submittedAt: ago(12e3) },
+    { id: "enrollment-2", centerId: center.id, guardianName: "Ana Cruz", guardianEmail: "ana.cruz@example.com", guardianPhone: "(614) 555-0302", children: [{ name: "Mateo Cruz", birthday: "2021-12-02", classroomId: "room-meadow" }], requestedStart: ahead(35), status: "toured", notes: "Family visited Tuesday. Comparing two centers.", submittedAt: ago(20500) },
+    { id: "enrollment-3", centerId: center.id, guardianName: "Morgan James", guardianEmail: "morgan.james@example.com", guardianPhone: "(614) 555-0303", children: [{ name: "Willow James", birthday: "2024-09-27", classroomId: "room-nest" }], requestedStart: ahead(14), status: "waitlist", notes: "Infant room at ratio \u2014 first on waitlist.", submittedAt: ago(3e4) },
+    { id: "enrollment-4", centerId: center.id, guardianName: "Casey OConnor", guardianEmail: "casey.oconnor@example.com", guardianPhone: "(614) 555-0304", children: [{ name: "Finn OConnor", birthday: "2022-07-19", classroomId: "room-meadow" }], requestedStart: ahead(45), status: "inquiry", notes: "Found us through the parent fair. Wants a tour next week.", submittedAt: ago(3100) }
   ];
   const events = [
     { id: "event-1", centerId: center.id, title: "Field Trip \u2014 Zoo Adventure", date: ahead(6), time: "9:00 AM \u2013 1:00 PM", detail: "Meadow Makers visit the Columbus Zoo.", attendees: 28 },
@@ -384,13 +384,12 @@ var childUpdateSchema = z.object({
   authorizedPickup: z.array(z.string().max(80)).max(8).optional(),
   medical: medicalSchema.optional()
 });
+var enrollmentChildSchema = z.object({ name: z.string().min(1).max(80), birthday: z.string().min(4).max(20), classroomId: z.string() });
 var enrollmentCreateSchema = z.object({
-  childName: z.string().min(1).max(80),
-  birthday: z.string().min(4).max(20),
   guardianName: z.string().min(1).max(80),
   guardianEmail: z.string().email(),
   guardianPhone: z.string().max(30),
-  classroomId: z.string(),
+  children: z.array(enrollmentChildSchema).min(1).max(8),
   requestedStart: z.string().max(20),
   notes: z.string().max(400).optional()
 });
@@ -666,9 +665,20 @@ function createApp(broadcast = () => void 0) {
   app2.post("/api/enrollments", authenticate, allow("admin"), (req, res) => {
     const body = parseBody(enrollmentCreateSchema, req.body, res);
     if (!body) return;
-    if (!store().classrooms.some((room) => room.id === body.classroomId && room.centerId === req.user.centerId)) return res.status(404).json({ error: "not_found", message: "Classroom not found." });
+    if (!body.children.every((child) => store().classrooms.some((room) => room.id === child.classroomId && room.centerId === req.user.centerId))) return res.status(404).json({ error: "not_found", message: "Classroom not found." });
     const application = { id: uid("enrollment"), centerId: req.user.centerId, status: "inquiry", submittedAt: (/* @__PURE__ */ new Date()).toISOString(), notes: body.notes ?? "", ...body };
     store().enrollments.unshift(application);
+    broadcast("data:updated", { type: "enrollment", id: application.id });
+    return res.status(201).json(application);
+  });
+  app2.post("/api/enrollments/:enrollmentId/children", authenticate, allow("admin"), (req, res) => {
+    const body = parseBody(enrollmentChildSchema, req.body, res);
+    if (!body) return;
+    const application = store().enrollments.find((item) => item.id === req.params.enrollmentId && item.centerId === req.user.centerId);
+    if (!application) return res.status(404).json({ error: "not_found", message: "Application not found." });
+    if (application.status === "enrolled" || application.status === "declined") return res.status(409).json({ error: "conflict", message: "This application is closed \u2014 start a new one for this family." });
+    if (!store().classrooms.some((room) => room.id === body.classroomId && room.centerId === req.user.centerId)) return res.status(404).json({ error: "not_found", message: "Classroom not found." });
+    application.children.push(body);
     broadcast("data:updated", { type: "enrollment", id: application.id });
     return res.status(201).json(application);
   });
@@ -681,26 +691,34 @@ function createApp(broadcast = () => void 0) {
     if (body.status && body.status !== application.status) {
       application.status = body.status;
       if (body.status === "enrolled") {
-        const [firstName, ...rest] = application.childName.split(" ");
-        const child = {
-          id: uid("child"),
-          centerId: req.user.centerId,
-          classroomId: application.classroomId,
-          guardianIds: [],
-          firstName: firstName || application.childName,
-          lastName: rest.join(" ") || "\u2014",
-          birthday: application.birthday,
-          avatar: "mint",
-          allergies: [],
-          notes: "Newly enrolled \u2014 welcome packet in progress.",
-          attendanceStatus: "expected",
-          authorizedPickup: [application.guardianName],
-          enrolledOn: today(),
-          guardianName: application.guardianName,
-          guardianPhone: application.guardianPhone,
-          medical: { physician: "", physicianPhone: "", conditions: "None reported", medications: "None", lastPhysical: "", immunizations: [], emergencyContacts: [{ name: application.guardianName, relation: "Parent", phone: application.guardianPhone }] }
-        };
-        store().children.push(child);
+        for (const enrollee of application.children) {
+          const [firstName, ...rest] = enrollee.name.split(" ");
+          const child = {
+            id: uid("child"),
+            centerId: req.user.centerId,
+            classroomId: enrollee.classroomId,
+            guardianIds: [],
+            firstName: firstName || enrollee.name,
+            lastName: rest.join(" ") || "\u2014",
+            birthday: enrollee.birthday,
+            avatar: "mint",
+            allergies: [],
+            notes: "Newly enrolled \u2014 welcome packet in progress.",
+            attendanceStatus: "expected",
+            authorizedPickup: [application.guardianName],
+            enrolledOn: today(),
+            guardianName: application.guardianName,
+            guardianPhone: application.guardianPhone,
+            medical: { physician: "", physicianPhone: "", conditions: "None reported", medications: "None", lastPhysical: "", immunizations: [], emergencyContacts: [{ name: application.guardianName, relation: "Parent", phone: application.guardianPhone }] }
+          };
+          store().children.push(child);
+          const room = store().classrooms.find((item) => item.id === enrollee.classroomId);
+          if (room && room.rates.registrationFee > 0) {
+            const due = /* @__PURE__ */ new Date();
+            due.setDate(due.getDate() + 14);
+            store().invoices.push({ id: uid("invoice"), centerId: req.user.centerId, guardianId: "", childId: child.id, amount: room.rates.registrationFee, dueDate: due.toISOString().slice(0, 10), status: "due", description: `Registration fee \u2014 ${room.name}` });
+          }
+        }
       }
     }
     broadcast("data:updated", { type: "enrollment", id: application.id });

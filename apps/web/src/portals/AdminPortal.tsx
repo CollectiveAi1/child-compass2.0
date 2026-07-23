@@ -68,7 +68,7 @@ export function AdminPortal() {
   const notifications: ShellNotification[] = [
     ...overdue.map(invoice => { const child = data.children.find(item => item.id === invoice.childId); return { id: invoice.id, title: 'Payment overdue', detail: `${child ? `${child.firstName} ${child.lastName}` : 'A family'} · ${formatMoney(invoice.amount)} · ${invoice.description}`, tone: 'warning' as const }; }),
     ...expiringCredentials.map(({ member, credential }) => ({ id: `${member.id}-${credential.name}`, title: 'Credential renewal due', detail: `${member.name} — ${credential.name} ${daysUntil(credential.expires) < 0 ? 'has expired' : `expires in ${daysUntil(credential.expires)} days`}`, tone: 'warning' as const })),
-    ...newInquiries.map(application => ({ id: application.id, title: 'New enrollment inquiry', detail: `${application.childName} · ${application.guardianName}`, tone: 'info' as const })),
+    ...newInquiries.map(application => ({ id: application.id, title: 'New enrollment inquiry', detail: `${application.children.map(child => child.name).join(', ')} · ${application.guardianName}`, tone: 'info' as const })),
   ];
 
   const messageBadge = data.stats.unreadMessages;

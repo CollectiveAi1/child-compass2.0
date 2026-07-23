@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { io } from 'socket.io-client';
 import { create } from 'zustand';
-import type { ActivityType, AttendanceStatus, ChildMedical, ComplaintStatus, ComplianceCheckStatus, CorrectiveActionStatus, DocumentCategory, DrillType, InspectionStatus, InspectionType, MealType, Message, StaffCredential, TuitionRates, ViolationSeverity, ViolationStatus } from '@compass/shared';
+import type { ActivityType, AttendanceStatus, ChildMedical, ComplaintStatus, ComplianceCheckStatus, CorrectiveActionStatus, DocumentCategory, DrillType, EnrollmentChild, InspectionStatus, InspectionType, MealType, Message, StaffCredential, TuitionRates, ViolationSeverity, ViolationStatus } from '@compass/shared';
 import { API_BASE, ApiFailure, api, getDashboard } from '../lib/api';
 import { useSession } from '../lib/session';
 
@@ -57,13 +57,14 @@ export const usePayment = () => useCompassMutation<{ invoiceId: string }>(v => `
 
 export interface NewChildInput { firstName: string; lastName: string; birthday: string; classroomId: string; guardianName?: string; guardianPhone?: string; allergies?: string[]; notes?: string; authorizedPickup?: string[] }
 export interface ChildUpdateInput { childId: string; firstName?: string; lastName?: string; classroomId?: string; guardianName?: string; guardianPhone?: string; allergies?: string[]; notes?: string; authorizedPickup?: string[]; medical?: ChildMedical }
-export interface NewEnrollmentInput { childName: string; birthday: string; guardianName: string; guardianEmail: string; guardianPhone: string; classroomId: string; requestedStart: string; notes?: string }
+export interface NewEnrollmentInput { guardianName: string; guardianEmail: string; guardianPhone: string; children: EnrollmentChild[]; requestedStart: string; notes?: string }
 export interface NewStaffInput { name: string; email: string; title?: string; phone?: string; classroomIds?: string[]; credentials?: StaffCredential[] }
 
 export const useAddChild = () => useCompassMutation<NewChildInput>(() => '/children', 'POST', v => v);
 export const useUpdateChild = () => useCompassMutation<ChildUpdateInput>(v => `/children/${v.childId}`, 'PATCH', ({ childId: _childId, ...rest }) => rest);
 export const useAddEnrollment = () => useCompassMutation<NewEnrollmentInput>(() => '/enrollments', 'POST', v => v);
 export const useUpdateEnrollment = () => useCompassMutation<{ enrollmentId: string; status?: string; notes?: string }>(v => `/enrollments/${v.enrollmentId}`, 'PATCH', ({ enrollmentId: _id, ...rest }) => rest);
+export const useAddEnrollmentChild = () => useCompassMutation<{ enrollmentId: string } & EnrollmentChild>(v => `/enrollments/${v.enrollmentId}/children`, 'POST', ({ enrollmentId: _id, ...rest }) => rest);
 export const useAddStaff = () => useCompassMutation<NewStaffInput>(() => '/staff', 'POST', v => v);
 export const useUpdateStaff = () => useCompassMutation<{ staffId: string; title?: string; phone?: string; classroomIds?: string[]; credentials?: StaffCredential[] }>(v => `/staff/${v.staffId}`, 'PATCH', ({ staffId: _id, ...rest }) => rest);
 export const useRecordMeal = () => useCompassMutation<{ date: string; meal: MealType; childCount: number; adultCount: number }>(() => '/meals', 'POST', v => v);
