@@ -30,6 +30,18 @@ export interface Center {
   phone: string;
   license: string;
   capacity: number;
+  // When on, the current week's tuition invoices generate automatically from
+  // each classroom's saved weekly rate.
+  autoWeeklyBilling: boolean;
+}
+
+// Fee schedule attached to a classroom, in cents. Weekly tuition drives
+// recurring billing; the others auto-fill one-off invoices.
+export interface TuitionRates {
+  registrationFee: number;
+  weeklyTuition: number;
+  lateFee: number;
+  miscFee: number;
 }
 
 export interface Classroom {
@@ -41,6 +53,7 @@ export interface Classroom {
   capacity: number;
   ratioLimit: number;
   teacherIds: string[];
+  rates: TuitionRates;
 }
 
 export interface ImmunizationRecord {
@@ -360,4 +373,12 @@ export function childAge(birthday: string, now = new Date()): string {
 
 export function formatMoney(cents: number): string {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(cents / 100);
+}
+
+// Monday of the week containing `date` (YYYY-MM-DD) — the key that makes
+// weekly tuition billing idempotent.
+export function weekMondayOf(date = new Date()): string {
+  const monday = new Date(date);
+  monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
+  return monday.toISOString().slice(0, 10);
 }

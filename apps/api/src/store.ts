@@ -89,7 +89,7 @@ function medicalFor(index: number, allergies: string[]): NonNullable<Child['medi
 function seed(): DemoStore {
   const center: Center = {
     id: 'center-1', name: 'Bright Path Learning Center', address: '1840 Meadow Lane, Columbus, OH',
-    phone: '(614) 555-0184', license: 'OH-ELC-28491', capacity: 48,
+    phone: '(614) 555-0184', license: 'OH-ELC-28491', capacity: 48, autoWeeklyBilling: false,
   };
   const users: User[] = [
     { id: 'user-admin', centerId: center.id, name: 'Sarah Johnson', email: 'admin@compass.demo', role: 'admin', avatar: 'SJ', classroomIds: [], childIds: [], title: 'Director', phone: '(614) 555-0100', hiredOn: '2019-08-12', credentials: [{ name: 'Administrator License', issued: '2019-08-01', expires: ahead(320) }, { name: 'CPR & First Aid', issued: ahead(-540), expires: ahead(190) }] },
@@ -101,9 +101,9 @@ function seed(): DemoStore {
     { id: 'user-parent-2', centerId: center.id, name: 'Priya Shah', email: 'priya@compass.demo', role: 'parent', avatar: 'PS', classroomIds: [], childIds: ['child-2'] },
   ];
   const classrooms: Classroom[] = [
-    { id: 'room-sunbeams', centerId: center.id, name: 'Sunbeam Studio', ageRange: '2–3 years', color: '#f2789f', capacity: 12, ratioLimit: 6, teacherIds: ['user-teacher', 'user-teacher-2'] },
-    { id: 'room-meadow', centerId: center.id, name: 'Meadow Makers', ageRange: '3–5 years', color: '#14b8a6', capacity: 18, ratioLimit: 9, teacherIds: ['user-teacher-3'] },
-    { id: 'room-nest', centerId: center.id, name: 'Cozy Nest', ageRange: '6–24 months', color: '#5a8dee', capacity: 8, ratioLimit: 4, teacherIds: ['user-teacher-4'] },
+    { id: 'room-sunbeams', centerId: center.id, name: 'Sunbeam Studio', ageRange: '2–3 years', color: '#f2789f', capacity: 12, ratioLimit: 6, teacherIds: ['user-teacher', 'user-teacher-2'], rates: { registrationFee: 15000, weeklyTuition: 31000, lateFee: 2500, miscFee: 1500 } },
+    { id: 'room-meadow', centerId: center.id, name: 'Meadow Makers', ageRange: '3–5 years', color: '#14b8a6', capacity: 18, ratioLimit: 9, teacherIds: ['user-teacher-3'], rates: { registrationFee: 15000, weeklyTuition: 28500, lateFee: 2500, miscFee: 1500 } },
+    { id: 'room-nest', centerId: center.id, name: 'Cozy Nest', ageRange: '6–24 months', color: '#5a8dee', capacity: 8, ratioLimit: 4, teacherIds: ['user-teacher-4'], rates: { registrationFee: 17500, weeklyTuition: 36500, lateFee: 2500, miscFee: 1500 } },
   ];
   const childSeeds: Array<[string, string, string, string, string, Child['attendanceStatus'], string]> = [
     ['child-1', 'room-sunbeams', 'Mia', 'Morgan', '2023-09-14', 'present', 'sun'],

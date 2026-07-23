@@ -259,6 +259,52 @@ describe('Child Care Compass API', () => {
     }
   });
 
+  it('manages classroom tuition rates and creates classrooms', async () => {
+    const { app } = createApp();
+    const token = await login(app, 'admin@compass.demo');
+    const updated = await request(app).patch('/api/classrooms/room-sunbeams').set('Authorization', `Bearer ${token}`)
+      .send({ rates: { registrationFee: 16000, weeklyTuition: 32500, lateFee: 3000, miscFee: 2000 } });
+    expect(updated.status).toBe(200);
+    expect(updated.body.rates.weeklyTuition).toBe(32500);
+    const created = await request(app).post('/api/classrooms').set('Authorization', `Bearer ${token}`)
+      .send({ name: 'Rainbow Room', ageRange: '4–5 years', capacity: 16, ratioLimit: 12, rates: { registrationFee: 15000, weeklyTuition: 26000, lateFee: 2500, miscFee: 1500 } });
+    expect(created.status).toBe(201);
+    expect(created.body.color).toMatch(/^#/);
+    const teacherToken = await login(app, 'teacher@compass.demo');
+    const denied = await request(app).patch('/api/classrooms/room-sunbeams').set('Authorization', `Bearer ${teacherToken}`).send({ rates: { registrationFee: 0, weeklyTuition: 0, lateFee: 0, miscFee: 0 } });
+    expect(denied.status).toBe(403);
+  });
+
+  it('generates recurring weekly tuition invoices idempotently from classroom rates', async () => {
+    const { app } = createApp();
+    const token = await login(app, 'admin@compass.demo');
+    const before = (await request(app).get('/api/dashboard').set('Authorization', `Bearer ${token}`)).body.invoices.length;
+    const first = await request(app).post('/api/billing/run-weekly').set('Authorization', `Bearer ${token}`).send({});
+    expect(first.status).toBe(200);
+    expect(first.body.created).toBe(18);
+    const second = await request(app).post('/api/billing/run-weekly').set('Authorization', `Bearer ${token}`).send({});
+    expect(second.body.created).toBe(0);
+    const dashboard = await request(app).get('/api/dashboard').set('Authorization', `Bearer ${token}`);
+    expect(dashboard.body.invoices.length).toBe(before + 18);
+    const weekly = dashboard.body.invoices.find((invoice: { childId: string; description: string }) => invoice.childId === 'child-1' && invoice.description.startsWith('Weekly tuition'));
+    expect(weekly.amount).toBe(31000);
+    expect(weekly.description).toContain('Sunbeam Studio');
+  });
+
+  it('runs weekly billing lazily when auto-billing is on and bills registration on enrollment', async () => {
+    const { app } = createApp();
+    const token = await login(app, 'admin@compass.demo');
+    await request(app).patch('/api/center').set('Authorization', `Bearer ${token}`).send({ autoWeeklyBilling: true });
+    const parentToken = await login(app, 'parent@compass.demo');
+    const parentDashboard = await request(app).get('/api/dashboard').set('Authorization', `Bearer ${parentToken}`);
+    expect(parentDashboard.body.invoices.some((invoice: { description: string }) => invoice.description.startsWith('Weekly tuition — Sunbeam Studio'))).toBe(true);
+    const child = await request(app).post('/api/children').set('Authorization', `Bearer ${token}`)
+      .send({ firstName: 'Reg', lastName: 'Fee', birthday: '2023-05-05', classroomId: 'room-nest' });
+    const dashboard = await request(app).get('/api/dashboard').set('Authorization', `Bearer ${token}`);
+    const registration = dashboard.body.invoices.find((invoice: { childId: string; description: string }) => invoice.childId === child.body.id && invoice.description.startsWith('Registration fee'));
+    expect(registration.amount).toBe(17500);
+  });
+
   it('strips document bytes from the dashboard payload', async () => {
     const { app } = createApp();
     const token = await login(app, 'admin@compass.demo');
