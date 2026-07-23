@@ -1,5 +1,5 @@
 import type { DashboardData } from '@compass/shared';
-import { childAge, formatMoney } from '@compass/shared';
+import { childAge, formatMinutes, formatMoney, timeEntryMinutes, weekMondayOf } from '@compass/shared';
 import type { ReportTable } from '../../lib/reports';
 import { attendanceWeek, fmtDate, fmtTime, roomName } from './common';
 
@@ -82,6 +82,22 @@ export function financialReport(data: DashboardData): ReportTable {
       const child = data.children.find(item => item.id === invoice.childId);
       return [invoice.id, child ? `${child.firstName} ${child.lastName}` : '—', child?.guardianName ?? '—', invoice.description, fmtDate(invoice.dueDate), formatMoney(invoice.amount), invoice.status, invoice.paidAt ? fmtDate(invoice.paidAt) : '—', invoice.method ?? '—'];
     }),
+  };
+}
+
+export function timesheetReport(data: DashboardData): ReportTable {
+  const week = weekMondayOf();
+  const staffName = (userId: string) => data.staff.find(member => member.id === userId)?.name ?? 'Former staff';
+  const entries = [...data.timeEntries].sort((a, b) => staffName(a.userId).localeCompare(staffName(b.userId)) || a.clockIn.localeCompare(b.clockIn));
+  const rows = entries.map(entry => [staffName(entry.userId), fmtDate(entry.date), fmtTime(entry.clockIn), entry.clockOut ? fmtTime(entry.clockOut) : 'On the clock', formatMinutes(timeEntryMinutes(entry)), entry.date >= week ? 'This week' : '']);
+  const weekTotals = data.staff
+    .map(member => ({ member, minutes: data.timeEntries.filter(entry => entry.userId === member.id && entry.date >= week).reduce((sum, entry) => sum + timeEntryMinutes(entry), 0) }))
+    .filter(row => row.minutes > 0)
+    .map(row => `${row.member.name}: ${formatMinutes(row.minutes)}`);
+  return {
+    title: 'Staff Timesheet', subtitle: `Clock-in/out log with daily hours · week beginning ${fmtDate(week)}`,
+    columns: ['Team member', 'Date', 'Clock in', 'Clock out', 'Hours', ''],
+    rows, footer: `This week's totals — ${weekTotals.join(' · ') || 'no hours logged yet'}.`,
   };
 }
 

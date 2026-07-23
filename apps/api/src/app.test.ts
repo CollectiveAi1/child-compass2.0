@@ -305,6 +305,43 @@ describe('Child Care Compass API', () => {
     expect(registration.amount).toBe(17500);
   });
 
+  it('runs the staff time clock: clock in, block double punch, clock out, scoped visibility', async () => {
+    const { app } = createApp();
+    const teacherToken = await login(app, 'sofia@compass.demo');
+    const clockIn = await request(app).post('/api/time-clock/clock-in').set('Authorization', `Bearer ${teacherToken}`).send({});
+    expect(clockIn.status).toBe(201);
+    expect(clockIn.body.clockOut).toBeUndefined();
+    const double = await request(app).post('/api/time-clock/clock-in').set('Authorization', `Bearer ${teacherToken}`).send({});
+    expect(double.status).toBe(409);
+    const clockOut = await request(app).post('/api/time-clock/clock-out').set('Authorization', `Bearer ${teacherToken}`).send({});
+    expect(clockOut.status).toBe(200);
+    expect(clockOut.body.clockOut).toBeTruthy();
+    const teacherDashboard = await request(app).get('/api/dashboard').set('Authorization', `Bearer ${teacherToken}`);
+    expect(teacherDashboard.body.timeEntries.every((entry: { userId: string }) => entry.userId === 'user-teacher-2')).toBe(true);
+    const adminToken = await login(app, 'admin@compass.demo');
+    const adminDashboard = await request(app).get('/api/dashboard').set('Authorization', `Bearer ${adminToken}`);
+    expect(new Set(adminDashboard.body.timeEntries.map((entry: { userId: string }) => entry.userId)).size).toBeGreaterThan(1);
+    const parentToken = await login(app, 'parent@compass.demo');
+    const parentDashboard = await request(app).get('/api/dashboard').set('Authorization', `Bearer ${parentToken}`);
+    expect(parentDashboard.body.timeEntries).toEqual([]);
+    const parentDenied = await request(app).post('/api/time-clock/clock-in').set('Authorization', `Bearer ${parentToken}`).send({});
+    expect(parentDenied.status).toBe(403);
+  });
+
+  it('lets admins add and remove manual time entries', async () => {
+    const { app } = createApp();
+    const token = await login(app, 'admin@compass.demo');
+    const created = await request(app).post('/api/time-clock/entries').set('Authorization', `Bearer ${token}`)
+      .send({ userId: 'user-teacher-3', clockIn: '2026-07-15T08:00:00.000Z', clockOut: '2026-07-15T12:30:00.000Z' });
+    expect(created.status).toBe(201);
+    expect(created.body.date).toBe('2026-07-15');
+    const invalid = await request(app).post('/api/time-clock/entries').set('Authorization', `Bearer ${token}`)
+      .send({ userId: 'user-teacher-3', clockIn: '2026-07-15T12:00:00.000Z', clockOut: '2026-07-15T08:00:00.000Z' });
+    expect(invalid.status).toBe(400);
+    const removed = await request(app).delete(`/api/time-clock/entries/${created.body.id}`).set('Authorization', `Bearer ${token}`);
+    expect(removed.status).toBe(200);
+  });
+
   it('strips document bytes from the dashboard payload', async () => {
     const { app } = createApp();
     const token = await login(app, 'admin@compass.demo');

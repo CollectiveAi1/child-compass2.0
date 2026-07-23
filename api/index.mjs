@@ -287,7 +287,27 @@ function seed() {
     { id: "check-11", centerId: center.id, category: "health_safety", item: "Emergency numbers and evacuation maps posted in each room", status: "compliant", lastChecked: ahead(-30) },
     { id: "check-12", centerId: center.id, category: "health_safety", item: "Daily sanitization schedule completed and initialed", status: "compliant", lastChecked: ahead(-1) }
   ];
-  return { center, users, classrooms, children, activities, messages, invoices, curriculum, enrollments, events, meals, cacfpClaims, documents, attendanceLog, inspections, complaints, violations, correctiveActions, drills, complianceChecks };
+  const staffShifts = [
+    ["user-admin", "07:30", "16:30"],
+    ["user-teacher", "07:45", "16:15"],
+    ["user-teacher-2", "08:30", "17:30"],
+    ["user-teacher-3", "07:50", "16:20"],
+    ["user-teacher-4", "08:00", "17:00"]
+  ];
+  const timeEntries = [];
+  history.forEach((date, dayIndex) => {
+    staffShifts.forEach(([userId, start, end], staffIndex) => {
+      if ((staffIndex + dayIndex) % 9 === 7) return;
+      const wobble = String((dayIndex * 7 + staffIndex * 3) % 10).padStart(2, "0");
+      timeEntries.push({ id: `time-${date}-${userId}`, centerId: center.id, userId, date, clockIn: `${date}T${start}:${wobble}.000Z`, clockOut: `${date}T${end}:${wobble}.000Z` });
+    });
+  });
+  timeEntries.push(
+    { id: `time-${today()}-user-admin`, centerId: center.id, userId: "user-admin", date: today(), clockIn: ago(260) },
+    { id: `time-${today()}-user-teacher`, centerId: center.id, userId: "user-teacher", date: today(), clockIn: ago(245) },
+    { id: `time-${today()}-user-teacher-4`, centerId: center.id, userId: "user-teacher-4", date: today(), clockIn: ago(230) }
+  );
+  return { center, users, classrooms, children, activities, messages, invoices, curriculum, enrollments, events, meals, cacfpClaims, documents, attendanceLog, inspections, complaints, violations, correctiveActions, drills, complianceChecks, timeEntries };
 }
 var current = seed();
 var store = () => current;
@@ -386,6 +406,7 @@ var ratesSchema = z.object({ registrationFee: z.number().int().min(0).max(1e7), 
 var classroomCreateSchema = z.object({ name: z.string().min(1).max(60), ageRange: z.string().min(1).max(40), color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(), capacity: z.number().int().min(1).max(100), ratioLimit: z.number().int().min(1).max(30), rates: ratesSchema });
 var classroomUpdateSchema = z.object({ name: z.string().min(1).max(60).optional(), ageRange: z.string().min(1).max(40).optional(), color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(), capacity: z.number().int().min(1).max(100).optional(), ratioLimit: z.number().int().min(1).max(30).optional(), rates: ratesSchema.optional() });
 var invoiceCreateSchema = z.object({ childId: z.string(), amount: z.number().int().min(1).max(1e7), dueDate: z.string().min(8).max(10), description: z.string().min(1).max(120) });
+var timeEntrySchema = z.object({ userId: z.string(), clockIn: z.string().datetime({ offset: true }), clockOut: z.string().datetime({ offset: true }) }).refine((body) => new Date(body.clockOut).getTime() > new Date(body.clockIn).getTime(), { message: "Clock-out must be after clock-in." });
 var recordPaymentSchema = z.object({ method: z.string().min(1).max(60) });
 var inspectionCreateSchema = z.object({ date: z.string().min(8).max(10), type: z.enum(["annual", "renewal", "monitoring", "follow_up", "complaint"]), inspector: z.string().min(1).max(80), status: z.enum(["scheduled", "passed", "findings", "failed"]), findings: z.number().int().min(0).max(200), notes: z.string().max(500) });
 var inspectionUpdateSchema = inspectionCreateSchema.partial();
@@ -459,6 +480,7 @@ function scopedDashboard(user) {
   const isAdmin = user.role === "admin";
   const documents = user.role === "parent" ? [] : data.documents.map(({ dataUrl: _dataUrl, ...meta }) => meta);
   const attendanceLog = data.attendanceLog.filter((entry) => visibleChildIds.includes(entry.childId));
+  const timeEntries = isAdmin ? data.timeEntries : user.role === "teacher" ? data.timeEntries.filter((entry) => entry.userId === user.id) : [];
   return {
     center: data.center,
     classrooms,
@@ -480,6 +502,7 @@ function scopedDashboard(user) {
     correctiveActions: isAdmin ? data.correctiveActions : [],
     drills: isAdmin ? data.drills : [],
     complianceChecks: isAdmin ? data.complianceChecks : [],
+    timeEntries,
     stats: {
       present: children.filter((child) => child.attendanceStatus === "present").length,
       expected: children.filter((child) => child.attendanceStatus === "expected").length,
@@ -867,6 +890,39 @@ function createApp(broadcast = () => void 0) {
     check.lastChecked = today();
     broadcast("data:updated", { type: "compliance_check", id: check.id });
     return res.json(check);
+  });
+  app2.post("/api/time-clock/clock-in", authenticate, allow("admin", "teacher"), (req, res) => {
+    const open = store().timeEntries.find((entry2) => entry2.userId === req.user.id && !entry2.clockOut);
+    if (open) return res.status(409).json({ error: "conflict", message: "You are already on the clock \u2014 clock out first." });
+    const entry = { id: uid("time"), centerId: req.user.centerId, userId: req.user.id, date: today(), clockIn: (/* @__PURE__ */ new Date()).toISOString() };
+    store().timeEntries.push(entry);
+    broadcast("data:updated", { type: "time_entry", id: entry.id });
+    return res.status(201).json(entry);
+  });
+  app2.post("/api/time-clock/clock-out", authenticate, allow("admin", "teacher"), (req, res) => {
+    const open = store().timeEntries.find((entry) => entry.userId === req.user.id && !entry.clockOut);
+    if (!open) return res.status(409).json({ error: "conflict", message: "You are not clocked in right now." });
+    open.clockOut = (/* @__PURE__ */ new Date()).toISOString();
+    broadcast("data:updated", { type: "time_entry", id: open.id });
+    return res.json(open);
+  });
+  app2.post("/api/time-clock/entries", authenticate, allow("admin"), (req, res) => {
+    const body = parseBody(timeEntrySchema, req.body, res);
+    if (!body) return;
+    const member = store().users.find((user) => user.id === body.userId && user.centerId === req.user.centerId && user.role !== "parent");
+    if (!member) return res.status(404).json({ error: "not_found", message: "Team member not found." });
+    const entry = { id: uid("time"), centerId: req.user.centerId, userId: member.id, date: body.clockIn.slice(0, 10), clockIn: body.clockIn, clockOut: body.clockOut };
+    store().timeEntries.push(entry);
+    broadcast("data:updated", { type: "time_entry", id: entry.id });
+    return res.status(201).json(entry);
+  });
+  app2.delete("/api/time-clock/entries/:entryId", authenticate, allow("admin"), (req, res) => {
+    const entries = store().timeEntries;
+    const index = entries.findIndex((entry) => entry.id === req.params.entryId && entry.centerId === req.user.centerId);
+    if (index < 0) return res.status(404).json({ error: "not_found", message: "Time entry not found." });
+    const [removed] = entries.splice(index, 1);
+    broadcast("data:updated", { type: "time_entry", id: removed.id });
+    return res.json(removed);
   });
   app2.post("/api/classrooms", authenticate, allow("admin"), (req, res) => {
     const body = parseBody(classroomCreateSchema, req.body, res);

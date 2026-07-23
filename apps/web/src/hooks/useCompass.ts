@@ -77,6 +77,10 @@ export const useUpdateCenter = () => useCompassMutation<{ name?: string; address
 export const useAddClassroom = () => useCompassMutation<{ name: string; ageRange: string; capacity: number; ratioLimit: number; rates: TuitionRates }>(() => '/classrooms', 'POST', v => v);
 export const useUpdateClassroom = () => useCompassMutation<{ classroomId: string; name?: string; ageRange?: string; capacity?: number; ratioLimit?: number; rates?: TuitionRates }>(v => `/classrooms/${v.classroomId}`, 'PATCH', ({ classroomId: _id, ...rest }) => rest);
 export const useRunWeeklyBilling = () => useCompassMutation<Record<string, never>>(() => '/billing/run-weekly', 'POST', () => ({}));
+export const useClockIn = () => useCompassMutation<Record<string, never>>(() => '/time-clock/clock-in', 'POST', () => ({}));
+export const useClockOut = () => useCompassMutation<Record<string, never>>(() => '/time-clock/clock-out', 'POST', () => ({}));
+export const useAddTimeEntry = () => useCompassMutation<{ userId: string; clockIn: string; clockOut: string }>(() => '/time-clock/entries', 'POST', v => v);
+export const useDeleteTimeEntry = () => useCompassMutation<{ entryId: string }>(v => `/time-clock/entries/${v.entryId}`, 'DELETE', () => ({}));
 
 export interface NewInspectionInput { date: string; type: InspectionType; inspector: string; status: InspectionStatus; findings: number; notes: string }
 export const useAddInspection = () => useCompassMutation<NewInspectionInput>(() => '/inspections', 'POST', v => v);

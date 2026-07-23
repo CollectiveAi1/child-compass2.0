@@ -1,7 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import { z } from 'zod';
-import type { Activity, AttendanceStatus, CenterDocumentFile, CenterEvent, Child, Classroom, Complaint, CorrectiveAction, EmergencyDrill, EnrollmentApplication, Inspection, Invoice, MealRecord, Message, User, Violation } from '@compass/shared';
+import type { Activity, AttendanceStatus, CenterDocumentFile, CenterEvent, Child, Classroom, Complaint, CorrectiveAction, EmergencyDrill, EnrollmentApplication, Inspection, Invoice, MealRecord, Message, TimeEntry, User, Violation } from '@compass/shared';
 import { weekMondayOf } from '@compass/shared';
 import { allow, authenticate, signUser, type AuthRequest } from './auth';
 import { store, today } from './store';
@@ -43,6 +43,7 @@ const ratesSchema = z.object({ registrationFee: z.number().int().min(0).max(10_0
 const classroomCreateSchema = z.object({ name: z.string().min(1).max(60), ageRange: z.string().min(1).max(40), color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(), capacity: z.number().int().min(1).max(100), ratioLimit: z.number().int().min(1).max(30), rates: ratesSchema });
 const classroomUpdateSchema = z.object({ name: z.string().min(1).max(60).optional(), ageRange: z.string().min(1).max(40).optional(), color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(), capacity: z.number().int().min(1).max(100).optional(), ratioLimit: z.number().int().min(1).max(30).optional(), rates: ratesSchema.optional() });
 const invoiceCreateSchema = z.object({ childId: z.string(), amount: z.number().int().min(1).max(10_000_000), dueDate: z.string().min(8).max(10), description: z.string().min(1).max(120) });
+const timeEntrySchema = z.object({ userId: z.string(), clockIn: z.string().datetime({ offset: true }), clockOut: z.string().datetime({ offset: true }) }).refine(body => new Date(body.clockOut).getTime() > new Date(body.clockIn).getTime(), { message: 'Clock-out must be after clock-in.' });
 const recordPaymentSchema = z.object({ method: z.string().min(1).max(60) });
 const inspectionCreateSchema = z.object({ date: z.string().min(8).max(10), type: z.enum(['annual', 'renewal', 'monitoring', 'follow_up', 'complaint']), inspector: z.string().min(1).max(80), status: z.enum(['scheduled', 'passed', 'findings', 'failed']), findings: z.number().int().min(0).max(200), notes: z.string().max(500) });
 const inspectionUpdateSchema = inspectionCreateSchema.partial();
@@ -128,6 +129,7 @@ function scopedDashboard(user: NonNullable<AuthRequest['user']>) {
   // Document bytes stay out of the dashboard payload; GET /documents/:id serves them.
   const documents = user.role === 'parent' ? [] : data.documents.map(({ dataUrl: _dataUrl, ...meta }) => meta);
   const attendanceLog = data.attendanceLog.filter(entry => visibleChildIds.includes(entry.childId));
+  const timeEntries = isAdmin ? data.timeEntries : user.role === 'teacher' ? data.timeEntries.filter(entry => entry.userId === user.id) : [];
   return {
     center: data.center, classrooms, children, activities: [...activities].sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
     messages: [...messages].sort((a, b) => a.createdAt.localeCompare(b.createdAt)), invoices, curriculum, staff,
@@ -135,6 +137,7 @@ function scopedDashboard(user: NonNullable<AuthRequest['user']>) {
     inspections: isAdmin ? data.inspections : [], complaints: isAdmin ? data.complaints : [],
     violations: isAdmin ? data.violations : [], correctiveActions: isAdmin ? data.correctiveActions : [],
     drills: isAdmin ? data.drills : [], complianceChecks: isAdmin ? data.complianceChecks : [],
+    timeEntries,
     stats: {
       present: children.filter(child => child.attendanceStatus === 'present').length,
       expected: children.filter(child => child.attendanceStatus === 'expected').length,
@@ -513,6 +516,44 @@ export function createApp(broadcast: Broadcast = () => undefined) {
     check.lastChecked = today();
     broadcast('data:updated', { type: 'compliance_check', id: check.id });
     return res.json(check);
+  });
+
+  app.post('/api/time-clock/clock-in', authenticate, allow('admin', 'teacher'), (req: AuthRequest, res) => {
+    const open = store().timeEntries.find(entry => entry.userId === req.user!.id && !entry.clockOut);
+    if (open) return res.status(409).json({ error: 'conflict', message: 'You are already on the clock — clock out first.' });
+    const entry: TimeEntry = { id: uid('time'), centerId: req.user!.centerId, userId: req.user!.id, date: today(), clockIn: new Date().toISOString() };
+    store().timeEntries.push(entry);
+    broadcast('data:updated', { type: 'time_entry', id: entry.id });
+    return res.status(201).json(entry);
+  });
+
+  app.post('/api/time-clock/clock-out', authenticate, allow('admin', 'teacher'), (req: AuthRequest, res) => {
+    const open = store().timeEntries.find(entry => entry.userId === req.user!.id && !entry.clockOut);
+    if (!open) return res.status(409).json({ error: 'conflict', message: 'You are not clocked in right now.' });
+    open.clockOut = new Date().toISOString();
+    broadcast('data:updated', { type: 'time_entry', id: open.id });
+    return res.json(open);
+  });
+
+  // Admin corrections: add a missed shift or remove a bad punch.
+  app.post('/api/time-clock/entries', authenticate, allow('admin'), (req: AuthRequest, res) => {
+    const body = parseBody(timeEntrySchema, req.body, res);
+    if (!body) return;
+    const member = store().users.find(user => user.id === body.userId && user.centerId === req.user!.centerId && user.role !== 'parent');
+    if (!member) return res.status(404).json({ error: 'not_found', message: 'Team member not found.' });
+    const entry: TimeEntry = { id: uid('time'), centerId: req.user!.centerId, userId: member.id, date: body.clockIn.slice(0, 10), clockIn: body.clockIn, clockOut: body.clockOut };
+    store().timeEntries.push(entry);
+    broadcast('data:updated', { type: 'time_entry', id: entry.id });
+    return res.status(201).json(entry);
+  });
+
+  app.delete('/api/time-clock/entries/:entryId', authenticate, allow('admin'), (req: AuthRequest, res) => {
+    const entries = store().timeEntries;
+    const index = entries.findIndex(entry => entry.id === req.params.entryId && entry.centerId === req.user!.centerId);
+    if (index < 0) return res.status(404).json({ error: 'not_found', message: 'Time entry not found.' });
+    const [removed] = entries.splice(index, 1);
+    broadcast('data:updated', { type: 'time_entry', id: removed!.id });
+    return res.json(removed);
   });
 
   app.post('/api/classrooms', authenticate, allow('admin'), (req: AuthRequest, res) => {

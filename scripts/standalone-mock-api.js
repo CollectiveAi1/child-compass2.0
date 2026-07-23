@@ -79,6 +79,7 @@
       cacfpClaims: user.role === 'admin' ? db.cacfpClaims : [],
       documents: user.role === 'parent' ? [] : db.documents.map(({ dataUrl, ...meta }) => meta),
       attendanceLog: db.attendanceLog.filter(entry => visibleChildIds.includes(entry.childId)),
+      timeEntries: user.role === 'admin' ? db.timeEntries : user.role === 'teacher' ? db.timeEntries.filter(entry => entry.userId === user.id) : [],
       inspections: user.role === 'admin' ? db.inspections : [],
       complaints: user.role === 'admin' ? db.complaints : [],
       violations: user.role === 'admin' ? db.violations : [],
@@ -241,6 +242,30 @@
       if (body.phone !== undefined) member.phone = body.phone;
       if (body.credentials !== undefined) member.credentials = body.credentials;
       return json(member);
+    }
+    if (path === '/time-clock/clock-in' && method === 'POST') {
+      if (user.role === 'parent') return forbidden('This action is not available for your role.');
+      if (db.timeEntries.some(entry => entry.userId === user.id && !entry.clockOut)) return json({ error: 'conflict', message: 'You are already on the clock — clock out first.' }, 409);
+      const entry = { id: uid('time'), centerId: user.centerId, userId: user.id, date: today(), clockIn: new Date().toISOString() };
+      db.timeEntries.push(entry);
+      return json(entry, 201);
+    }
+    if (path === '/time-clock/clock-out' && method === 'POST') {
+      if (user.role === 'parent') return forbidden('This action is not available for your role.');
+      const open = db.timeEntries.find(entry => entry.userId === user.id && !entry.clockOut);
+      if (!open) return json({ error: 'conflict', message: 'You are not clocked in right now.' }, 409);
+      open.clockOut = new Date().toISOString();
+      return json(open);
+    }
+    if (path === '/time-clock/entries' && method === 'POST' && user.role === 'admin') {
+      const entry = { id: uid('time'), centerId: user.centerId, userId: body.userId, date: body.clockIn.slice(0, 10), clockIn: body.clockIn, clockOut: body.clockOut };
+      db.timeEntries.push(entry);
+      return json(entry, 201);
+    }
+    if ((match = path.match(/^\/time-clock\/entries\/([^/]+)$/)) && method === 'DELETE' && user.role === 'admin') {
+      const index = db.timeEntries.findIndex(entry => entry.id === match[1]);
+      if (index < 0) return notFound('Time entry not found.');
+      return json(db.timeEntries.splice(index, 1)[0]);
     }
     if (path === '/meals' && method === 'POST') {
       if (user.role === 'parent') return forbidden('This action is not available for your role.');

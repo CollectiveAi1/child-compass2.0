@@ -1,11 +1,11 @@
 import { FormEvent, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { BookOpen, Camera, Check, ChevronRight, ClipboardCheck, Clock3, Coffee, Download, FileText, LayoutDashboard, MessageCircle, Moon, Plus, Send, Sparkles, Upload, Utensils, Users } from 'lucide-react';
+import { BookOpen, Camera, Check, ChevronRight, ClipboardCheck, Clock3, Coffee, Download, FileText, LayoutDashboard, MessageCircle, Moon, Plus, Send, Sparkles, Timer, Upload, Utensils, Users } from 'lucide-react';
 import type { ActivityType, AttendanceStatus, Child, DashboardData } from '@compass/shared';
-import { nextAttendanceStatus } from '@compass/shared';
+import { formatMinutes, nextAttendanceStatus, timeEntryMinutes, weekMondayOf } from '@compass/shared';
 import { AppShell } from '../components/AppShell';
 import { Avatar, Button, ErrorScreen, LoadingScreen, Modal, spring } from '../components/ui';
-import { useActivity, useAttendance, useDashboard, useMarkThreadRead, useMessage, useUploadDocument } from '../hooks/useCompass';
+import { useActivity, useAttendance, useClockIn, useClockOut, useDashboard, useMarkThreadRead, useMessage, useUploadDocument } from '../hooks/useCompass';
 import { getDocumentFile } from '../lib/api';
 import { formatBytes, readFileAsDataUrl, triggerDownload } from '../lib/reports';
 import { firstName } from '../lib/format';
@@ -35,6 +35,29 @@ function chime() {
       oscillator.frequency.value = frequency; gain.gain.setValueAtTime(0, context.currentTime + index * .07); gain.gain.linearRampToValueAtTime(.08, context.currentTime + index * .07 + .02); gain.gain.exponentialRampToValueAtTime(.001, context.currentTime + index * .07 + .28); oscillator.start(context.currentTime + index * .07); oscillator.stop(context.currentTime + index * .07 + .3);
     });
   } catch { /* Audio is an enhancement. */ }
+}
+
+// Personal time clock: one tap to punch in or out, with live daily and weekly
+// hour totals from the signed time log.
+function TimeClockChip({ data }: { data: DashboardData }) {
+  const clockIn = useClockIn();
+  const clockOut = useClockOut();
+  const open = data.timeEntries.find(entry => !entry.clockOut);
+  const todayDate = new Date().toISOString().slice(0, 10);
+  const week = weekMondayOf();
+  const todayMinutes = data.timeEntries.filter(entry => entry.date === todayDate).reduce((sum, entry) => sum + timeEntryMinutes(entry), 0);
+  const weekMinutes = data.timeEntries.filter(entry => entry.date >= week).reduce((sum, entry) => sum + timeEntryMinutes(entry), 0);
+  const busy = clockIn.isPending || clockOut.isPending;
+  return <div className={`clock-chip ${open ? 'on-clock' : ''}`}>
+    <span className="clock-icon"><Timer size={20}/></span>
+    <div>
+      <b>{open ? `On the clock since ${new Date(open.clockIn).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}` : 'Clocked out'}</b>
+      <small>Today {formatMinutes(todayMinutes)} · This week {formatMinutes(weekMinutes)}</small>
+    </div>
+    <Button className={open ? 'button-soft button-compact' : 'button-teal button-compact'} disabled={busy} onClick={() => (open ? clockOut.mutate({}) : clockIn.mutate({}))}>
+      {busy ? 'Saving…' : open ? 'Clock out' : 'Clock in'}
+    </Button>
+  </div>;
 }
 
 // Real shared files from the center's document vault — teachers can download
@@ -112,7 +135,7 @@ export function TeacherPortal() {
     .map(item => { const child = data.children.find(entry => entry.id === item.childId); return { id: item.id, title: `Message from ${child ? `${child.firstName}’s` : 'a'} family`, detail: item.body, tone: 'info' as const }; });
   return <AppShell navigation={navigation} active={active} onNavigate={setActive} centerName={data.center.name} centerDetail={`${data.center.address} · ${data.center.phone}`} notifications={notifications}>
     <main className={`portal-page teacher-page mode-${mode.tone}`}>
-      <div className="teacher-welcome"><div><p className="eyebrow"><span className="live-pulse"/>{mode.label}</p><h1>{mode.title}, {firstName(user.name)}.</h1><p>{mode.note}</p></div><div className="room-chip"><span style={{ background: room?.color }}>☀</span><div><b>{room?.name}</b><small>{room?.ageRange}</small></div></div></div>
+      <div className="teacher-welcome"><div><p className="eyebrow"><span className="live-pulse"/>{mode.label}</p><h1>{mode.title}, {firstName(user.name)}.</h1><p>{mode.note}</p></div><div className="welcome-side"><TimeClockChip data={data}/><div className="room-chip"><span style={{ background: room?.color }}>☀</span><div><b>{room?.name}</b><small>{room?.ageRange}</small></div></div></div></div>
 
       {active === 'today' ? <div className="teacher-layout"><section className="teacher-primary"><div className="teacher-stat-row"><article><span className="stat-icon present"><Users/></span><div><p>Present now</p><h2>{data.stats.present}<small> of {data.children.length}</small></h2></div></article><article><span className="stat-icon ratio"><Sparkles/></span><div><p>Live ratio</p><h2>1:{ratio}<small> / 1:{room?.ratioLimit}</small></h2></div><span className="safe-pill">Comfortable</span></article><article><span className="stat-icon message"><MessageCircle/></span><div><p>Family messages</p><h2>{data.stats.unreadMessages}<small> unread</small></h2></div></article></div>
         <section className="quick-bento"><header><div><p className="eyebrow">One-tap care log</p><h2>What’s happening now?</h2></div><button onClick={() => setQuick(true)}>Open all <ChevronRight size={15}/></button></header><div><motion.button whileTap={{ scale: .94 }} onClick={() => setQuick(true)} className="quick-photo"><Camera/><span><b>Share a moment</b><small>Photo + family update</small></span><Plus/></motion.button><motion.button whileTap={{ scale: .94 }} onClick={() => setQuick(true)} className="quick-meal"><Utensils/><span><b>Log meal</b><small>Fast portions</small></span></motion.button><motion.button whileTap={{ scale: .94 }} onClick={() => setQuick(true)} className="quick-nap"><Moon/><span><b>Log nap</b><small>Start or finish</small></span></motion.button><motion.button whileTap={{ scale: .94 }} onClick={() => setQuick(true)} className="quick-note"><FileText/><span><b>Care note</b><small>Add detail</small></span></motion.button></div></section>
