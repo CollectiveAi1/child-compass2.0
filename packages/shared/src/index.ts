@@ -284,6 +284,28 @@ export interface EmergencyDrill {
   notes?: string;
 }
 
+// One shift on the staff time clock. clockOut is absent while the person is
+// still on the clock.
+export interface TimeEntry {
+  id: string;
+  centerId: string;
+  userId: string;
+  date: string;
+  clockIn: string;
+  clockOut?: string;
+}
+
+export function timeEntryMinutes(entry: { clockIn: string; clockOut?: string }, now = new Date()): number {
+  const end = entry.clockOut ? new Date(entry.clockOut) : now;
+  return Math.max(0, Math.round((end.getTime() - new Date(entry.clockIn).getTime()) / 60_000));
+}
+
+export function formatMinutes(minutes: number): string {
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  return hours ? `${hours}h ${String(rest).padStart(2, '0')}m` : `${rest}m`;
+}
+
 export type ComplianceCheckStatus = 'compliant' | 'action_needed' | 'pending';
 
 export interface ComplianceCheck {
@@ -327,6 +349,7 @@ export interface DashboardData {
   correctiveActions: CorrectiveAction[];
   drills: EmergencyDrill[];
   complianceChecks: ComplianceCheck[];
+  timeEntries: TimeEntry[];
   stats: {
     present: number;
     expected: number;

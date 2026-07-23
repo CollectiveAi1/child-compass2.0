@@ -1,4 +1,4 @@
-import type { Activity, AttendanceEntry, CacfpClaim, Center, CenterDocumentFile, CenterEvent, Child, Classroom, Complaint, ComplianceCheck, CorrectiveAction, Curriculum, EmergencyDrill, EnrollmentApplication, Inspection, Invoice, MealRecord, Message, User, Violation } from '@compass/shared';
+import type { Activity, AttendanceEntry, CacfpClaim, Center, CenterDocumentFile, CenterEvent, Child, Classroom, Complaint, ComplianceCheck, CorrectiveAction, Curriculum, EmergencyDrill, EnrollmentApplication, Inspection, Invoice, MealRecord, Message, TimeEntry, User, Violation } from '@compass/shared';
 
 // In-memory demo storage. On Vercel it lives in the function instance's memory
 // and resets when the instance recycles; swap for a managed PostgreSQL database
@@ -24,6 +24,7 @@ export interface DemoStore {
   correctiveActions: CorrectiveAction[];
   drills: EmergencyDrill[];
   complianceChecks: ComplianceCheck[];
+  timeEntries: TimeEntry[];
 }
 
 const ago = (minutes: number) => new Date(Date.now() - minutes * 60_000).toISOString();
@@ -280,7 +281,29 @@ function seed(): DemoStore {
     { id: 'check-12', centerId: center.id, category: 'health_safety', item: 'Daily sanitization schedule completed and initialed', status: 'compliant', lastChecked: ahead(-1) },
   ];
 
-  return { center, users, classrooms, children, activities, messages, invoices, curriculum, enrollments, events, meals, cacfpClaims, documents, attendanceLog, inspections, complaints, violations, correctiveActions, drills, complianceChecks };
+  // A week of shifts for every staff member; Jordan is still on the clock today.
+  const staffShifts: Array<[string, string, string]> = [
+    ['user-admin', '07:30', '16:30'],
+    ['user-teacher', '07:45', '16:15'],
+    ['user-teacher-2', '08:30', '17:30'],
+    ['user-teacher-3', '07:50', '16:20'],
+    ['user-teacher-4', '08:00', '17:00'],
+  ];
+  const timeEntries: TimeEntry[] = [];
+  history.forEach((date, dayIndex) => {
+    staffShifts.forEach(([userId, start, end], staffIndex) => {
+      if ((staffIndex + dayIndex) % 9 === 7) return;
+      const wobble = String((dayIndex * 7 + staffIndex * 3) % 10).padStart(2, '0');
+      timeEntries.push({ id: `time-${date}-${userId}`, centerId: center.id, userId, date, clockIn: `${date}T${start}:${wobble}.000Z`, clockOut: `${date}T${end}:${wobble}.000Z` });
+    });
+  });
+  timeEntries.push(
+    { id: `time-${today()}-user-admin`, centerId: center.id, userId: 'user-admin', date: today(), clockIn: ago(260) },
+    { id: `time-${today()}-user-teacher`, centerId: center.id, userId: 'user-teacher', date: today(), clockIn: ago(245) },
+    { id: `time-${today()}-user-teacher-4`, centerId: center.id, userId: 'user-teacher-4', date: today(), clockIn: ago(230) },
+  );
+
+  return { center, users, classrooms, children, activities, messages, invoices, curriculum, enrollments, events, meals, cacfpClaims, documents, attendanceLog, inspections, complaints, violations, correctiveActions, drills, complianceChecks, timeEntries };
 }
 
 let current = seed();
